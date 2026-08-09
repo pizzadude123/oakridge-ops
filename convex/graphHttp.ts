@@ -2,7 +2,7 @@ import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { httpAction } from "./_generated/server";
 import { decryptGraphSecret, encryptGraphSecret, sha256Base64Url } from "./lib/graphCrypto";
-import { providerConnectionRedirect } from "./lib/mailDelivery";
+import { providerConnectionRedirect, type MicrosoftConnectionReturnTo } from "./lib/mailDelivery";
 
 const SCOPES = "openid profile offline_access User.Read Mail.Read Mail.Send Files.Read";
 
@@ -12,8 +12,8 @@ function requiredEnv(name: string) {
   return value;
 }
 
-function appRedirect(result: "connected" | "error") {
-  return `${requiredEnv("SITE_URL").replace(/\/+$/, "")}${providerConnectionRedirect("microsoft", result)}`;
+function appRedirect(result: "connected" | "error", returnTo: MicrosoftConnectionReturnTo) {
+  return `${requiredEnv("SITE_URL").replace(/\/+$/, "")}${providerConnectionRedirect("microsoft", result, returnTo)}`;
 }
 
 function safeError(error: unknown) {
@@ -24,6 +24,7 @@ function safeError(error: unknown) {
 
 export const graphCallback = httpAction(async (ctx, request) => {
   let ownerId: Id<"users"> | null = null;
+  let returnTo: MicrosoftConnectionReturnTo = "email";
   try {
     const url = new URL(request.url);
     const state = url.searchParams.get("state");
@@ -31,6 +32,7 @@ export const graphCallback = httpAction(async (ctx, request) => {
     const stateHash = await sha256Base64Url(state);
     const attempt = await ctx.runMutation(internal.graphData.consumeAuthAttempt, { stateHash });
     ownerId = attempt.ownerId;
+    returnTo = attempt.returnTo ?? "inbox";
     const oauthError = url.searchParams.get("error_description") || url.searchParams.get("error");
     if (oauthError) throw new Error(`Microsoft authorization was declined: ${oauthError}`);
     const code = url.searchParams.get("code");
@@ -85,11 +87,11 @@ export const graphCallback = httpAction(async (ctx, request) => {
       displayName: profile.displayName || "Oakridge Microsoft account",
     });
     await ctx.scheduler.runAfter(0, internal.microsoftGraph.syncConnection, { ownerId: attempt.ownerId });
-    return new Response(null, { status: 302, headers: { Location: appRedirect("connected") } });
+    return new Response(null, { status: 302, headers: { Location: appRedirect("connected", returnTo) } });
   } catch (error) {
     if (ownerId) {
       await ctx.runMutation(internal.graphData.markConnectionError, { ownerId, message: safeError(error) });
     }
-    return new Response(null, { status: 302, headers: { Location: appRedirect("error") } });
+    return new Response(null, { status: 302, headers: { Location: appRedirect("error", returnTo) } });
   }
 });

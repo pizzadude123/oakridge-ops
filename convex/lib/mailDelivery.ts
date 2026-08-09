@@ -2,6 +2,7 @@ export type ProviderDeliveryStatus = "draft" | "opened_in_gmail" | "sending" | "
 export type SendingProvider = "google_gmail" | "microsoft_graph";
 export type MessageProvider = "gmail_compose" | SendingProvider | undefined;
 export type ManualMessageStatus = "draft" | "opened_in_gmail" | "sent";
+export type MicrosoftConnectionReturnTo = "email" | "inbox" | "excel";
 export type ProviderResultCounts = {
   accepted: number;
   failed: number;
@@ -91,7 +92,12 @@ export function providerRetryAction(counts: ProviderResultCounts, interrupted: b
   return { label: "Send emails", disabled: false };
 }
 
-export function providerConnectionRedirect(provider: "google" | "microsoft", result: "connected" | "error") {
+export function providerConnectionRedirect(
+  provider: "google" | "microsoft",
+  result: "connected" | "error",
+  returnTo: MicrosoftConnectionReturnTo = "email",
+) {
   const parameter = provider === "google" ? "google" : "graph";
-  return `/#/email?${parameter}=${result}`;
+  const destination = provider === "google" ? "email" : returnTo;
+  return `/#/${destination}?${parameter}=${result}`;
 }

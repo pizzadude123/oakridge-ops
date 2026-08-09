@@ -173,6 +173,7 @@ export default defineSchema({
     stateHash: v.string(),
     encryptedCodeVerifier: v.string(),
     codeVerifierIv: v.string(),
+    returnTo: v.optional(v.union(v.literal("email"), v.literal("inbox"), v.literal("excel"))),
     expiresAt: v.number(),
     consumedAt: v.optional(v.number()),
     createdAt: v.number(),

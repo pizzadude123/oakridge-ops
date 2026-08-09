@@ -85,8 +85,8 @@ async function fetchInbox(accessToken: string) {
 }
 
 export const beginConnection = action({
-  args: {},
-  handler: async (ctx): Promise<{ authorizationUrl: string }> => {
+  args: { returnTo: v.optional(v.union(v.literal("email"), v.literal("inbox"), v.literal("excel"))) },
+  handler: async (ctx, args): Promise<{ authorizationUrl: string }> => {
     const ownerId = await getAuthUserId(ctx);
     if (!ownerId) throw new Error("Sign in before connecting Microsoft Outlook.");
     const clientId = requiredEnv("MICROSOFT_CLIENT_ID");
@@ -102,6 +102,7 @@ export const beginConnection = action({
       stateHash,
       encryptedCodeVerifier: encryptedVerifier.ciphertext,
       codeVerifierIv: encryptedVerifier.iv,
+      returnTo: args.returnTo ?? "inbox",
       expiresAt: Date.now() + 10 * 60 * 1000,
     });
     const authorization = new URL(`https://login.microsoftonline.com/${tenantAuthority()}/oauth2/v2.0/authorize`);

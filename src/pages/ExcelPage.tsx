@@ -76,7 +76,7 @@ export function ExcelPage() {
   async function connectMicrosoft() {
     setMonitorBusy("microsoft"); resetMonitorFeedback();
     try {
-      const result = await beginMicrosoftConnection();
+      const result = await beginMicrosoftConnection({ returnTo: "excel" });
       window.location.assign(result.authorizationUrl);
     } catch (caught) {
       setMonitorError(caught instanceof Error ? caught.message : "Could not start Microsoft authorization.");

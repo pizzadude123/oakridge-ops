@@ -94,6 +94,7 @@ export const createAuthAttempt = internalMutation({
     stateHash: v.string(),
     encryptedCodeVerifier: v.string(),
     codeVerifierIv: v.string(),
+    returnTo: v.union(v.literal("email"), v.literal("inbox"), v.literal("excel")),
     expiresAt: v.number(),
   },
   handler: async (ctx, args) => {

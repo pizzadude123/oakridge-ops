@@ -153,7 +153,7 @@ export function EmailPage() {
     try {
       const result = provider === "google"
         ? await beginGoogleConnection({})
-        : await beginMicrosoftConnection({});
+        : await beginMicrosoftConnection({ returnTo: "email" });
       window.location.assign(result.authorizationUrl);
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : `${provider === "google" ? "Google" : "Microsoft"} could not be connected.`;

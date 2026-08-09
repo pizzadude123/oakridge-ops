@@ -41,7 +41,7 @@ export function InboxPage() {
   async function connect() {
     setBusy("connect"); setError(""); setNotice("");
     try {
-      const result = await beginConnection();
+      const result = await beginConnection({ returnTo: "inbox" });
       window.location.assign(result.authorizationUrl);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not start Microsoft authorization.");

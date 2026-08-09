@@ -125,5 +125,7 @@ describe("campaign identity and reporting", () => {
   it("returns OAuth callbacks to Email Studio", () => {
     expect(providerConnectionRedirect("google", "connected")).toBe("/#/email?google=connected");
     expect(providerConnectionRedirect("microsoft", "error")).toBe("/#/email?graph=error");
+    expect(providerConnectionRedirect("microsoft", "connected", "inbox")).toBe("/#/inbox?graph=connected");
+    expect(providerConnectionRedirect("microsoft", "error", "excel")).toBe("/#/excel?graph=error");
   });
 });
