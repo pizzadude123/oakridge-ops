@@ -50,14 +50,19 @@ describe("email image asset validation", () => {
       fileName: "oakridge-image-2.jpg",
     });
     const first = emailAssetCampaignMaterial([
-      { sha256: "aaa", alt: "Opening ceremony" },
-      { sha256: "bbb", alt: "Committee session" },
+      { sha256: "aaa", alt: "Opening ceremony", placement: "header", width: "full", alignment: "center" },
+      { sha256: "bbb", alt: "Committee session", placement: "body", width: "wide", alignment: "center" },
     ]);
     const reordered = emailAssetCampaignMaterial([
-      { sha256: "bbb", alt: "Committee session" },
-      { sha256: "aaa", alt: "Opening ceremony" },
+      { sha256: "bbb", alt: "Committee session", placement: "body", width: "wide", alignment: "center" },
+      { sha256: "aaa", alt: "Opening ceremony", placement: "header", width: "full", alignment: "center" },
+    ]);
+    const moved = emailAssetCampaignMaterial([
+      { sha256: "aaa", alt: "Opening ceremony", placement: "footer", width: "compact", alignment: "right" },
+      { sha256: "bbb", alt: "Committee session", placement: "body", width: "wide", alignment: "center" },
     ]);
     expect(first).not.toBe(reordered);
+    expect(first).not.toBe(moved);
     expect(first).toContain("Opening ceremony");
   });
 

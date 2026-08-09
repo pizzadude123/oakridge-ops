@@ -32,9 +32,16 @@ export type GraphSendMailInput = {
   inlineImages?: InlineEmailImage[];
 };
 
+export type EmailImagePlacement = "header" | "body" | "footer";
+export type EmailImageWidth = "full" | "wide" | "compact";
+export type EmailImageAlignment = "left" | "center" | "right";
+
 export type EmailLayoutImage = {
   src: string;
   alt: string;
+  placement?: EmailImagePlacement;
+  width?: EmailImageWidth;
+  alignment?: EmailImageAlignment;
 };
 
 export type InlineEmailImage = {
@@ -65,10 +72,22 @@ export function buildOakridgeEmailHtml({
   images?: EmailLayoutImage[];
 }) {
   const safePreheader = escapeHtml(preheader);
-  const imageRows = images.map((image) => `
-        <tr><td class="email-image-pad" style="padding:0 42px 18px;background:#FAF5ED;">
-          <img src="${escapeHtml(image.src)}" width="556" alt="${escapeHtml(image.alt)}" style="display:block;width:100%;max-width:556px;height:auto;border:0;border-radius:14px;background:#DCEEF0;">
-        </td></tr>`).join("");
+  const imageRows = (placement: EmailImagePlacement) => images
+    .filter((image) => (image.placement ?? "body") === placement)
+    .map((image) => {
+      const width = image.width ?? "wide";
+      const pixels = width === "full" ? 640 : width === "compact" ? 320 : 556;
+      const alignment = image.alignment ?? "center";
+      const padding = width === "full" ? "0" : "0 42px 24px";
+      const radius = width === "full" ? "0" : "14px";
+      return `
+        <tr><td class="email-image-pad" align="${alignment}" style="padding:${padding};background:#FAF5ED;">
+          <img src="${escapeHtml(image.src)}" width="${pixels}" alt="${escapeHtml(image.alt)}" style="display:block;width:100%;max-width:${pixels}px;height:auto;border:0;border-radius:${radius};background:#DCEEF0;">
+        </td></tr>`;
+    }).join("");
+  const firstParagraphEnd = bodyHtml.indexOf("</p>");
+  const bodyIntroduction = firstParagraphEnd >= 0 ? bodyHtml.slice(0, firstParagraphEnd + 4) : "";
+  const bodyRemainder = firstParagraphEnd >= 0 ? bodyHtml.slice(firstParagraphEnd + 4) : bodyHtml;
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -81,33 +100,43 @@ export function buildOakridgeEmailHtml({
     @media only screen and (max-width: 620px) {
       .email-shell { width: 100% !important; }
       .email-pad { padding-left: 24px !important; padding-right: 24px !important; }
-      .email-image-pad { padding-left: 18px !important; padding-right: 18px !important; }
-      .email-title { font-size: 25px !important; }
+      .email-image-pad { padding-left: 20px !important; padding-right: 20px !important; }
+      .email-title { font-size: 27px !important; }
     }
     .email-copy h1, .email-copy h2, .email-copy h3 { margin:0 0 18px;color:#003057;line-height:1.15;letter-spacing:-.02em; }
-    .email-copy h1 { font-size:30px; } .email-copy h2 { font-size:25px; } .email-copy h3 { font-size:20px; }
-    .email-copy p { margin:0 0 18px; } .email-copy ul, .email-copy ol { margin:0 0 20px;padding-left:24px; }
-    .email-copy a { color:#096F7A;font-weight:700; } .email-copy blockquote { margin:22px 0;padding:16px 18px;border-left:4px solid #30CDD7;background:#E5F5F6; }
+    .email-copy h1 { font-size:30px; } .email-copy h2 { font-size:24px; } .email-copy h3 { font-size:19px; }
+    .email-copy p { margin:0 0 19px; } .email-copy ul, .email-copy ol { margin:0 0 22px;padding-left:24px; }
+    .email-copy li { margin-bottom:8px; }
+    .email-copy a { color:#087D88;font-weight:700;text-decoration:underline; } .email-copy blockquote { margin:24px 0;padding:17px 20px;border-left:4px solid #30CDD7;background:#E5F5F6;color:#003057; }
   </style>
 </head>
-<body bgcolor="#DCEEF0" style="margin:0;padding:0;background:#DCEEF0;color:#16324F;font-family:Arial,Helvetica,sans-serif;">
+<body bgcolor="#E7EFF1" style="margin:0;padding:0;background:#E7EFF1;color:#16324F;font-family:Arial,Helvetica,sans-serif;">
   <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">${safePreheader}</div>
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#DCEEF0" style="background:#DCEEF0;">
-    <tr><td align="center" style="padding:28px 12px;">
-      <table role="presentation" class="email-shell" width="640" cellspacing="0" cellpadding="0" border="0" bgcolor="#FAF5ED" style="width:640px;max-width:640px;background:#FAF5ED;border-radius:18px;overflow:hidden;box-shadow:0 16px 50px rgba(0,48,87,.14);">
-        <tr><td style="height:6px;background:#30CDD7;font-size:0;line-height:0;">&nbsp;</td></tr>
-        <tr><td class="email-pad" style="padding:25px 42px 23px;background:#003057;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#E7EFF1" style="background:#E7EFF1;">
+    <tr><td align="center" style="padding:32px 12px;">
+      <table role="presentation" class="email-shell" width="640" cellspacing="0" cellpadding="0" border="0" bgcolor="#FAF5ED" style="width:640px;max-width:640px;background:#FAF5ED;border-radius:16px;overflow:hidden;box-shadow:0 18px 55px rgba(0,48,87,.15);">
+        <tr><td style="height:5px;background:#30CDD7;font-size:0;line-height:0;">&nbsp;</td></tr>
+        <tr><td class="email-pad" style="padding:24px 42px;background:#003057;">
           <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0"><tr>
             <td width="62" valign="middle"><img src="https://pizzadude123.github.io/oakridge-ops/oakridge-logo-white.png" width="52" height="52" alt="" style="display:block;width:52px;height:52px;border:0;object-fit:contain;"></td>
-            <td valign="middle" style="padding-left:14px;color:#FAF5ED;"><span style="display:block;margin-bottom:5px;color:#30CDD7;font-size:10px;font-weight:700;letter-spacing:1.8px;text-transform:uppercase;">Official delegate communication</span><strong class="email-title" style="display:block;font-size:27px;line-height:1.05;letter-spacing:-.5px;">Oakridge MUN</strong></td>
+            <td valign="middle" style="padding-left:14px;color:#FAF5ED;"><span style="display:block;margin-bottom:5px;color:#30CDD7;font-size:10px;font-weight:700;letter-spacing:1.8px;text-transform:uppercase;">Model United Nations</span><strong style="display:block;font-size:23px;line-height:1.08;letter-spacing:-.4px;">Oakridge MUN</strong></td>
+            <td valign="middle" align="right" style="color:#B4EBF5;font-size:10px;font-weight:700;line-height:1.45;letter-spacing:1.2px;text-transform:uppercase;">Delegate services<br><span style="color:#FAF5ED;">Official dispatch</span></td>
           </tr></table>
         </td></tr>
-        <tr><td class="email-pad" style="padding:15px 42px;background:#B4EBF5;color:#003057;font-size:11px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;">Delegate communications&nbsp;&nbsp;·&nbsp;&nbsp;Oakridge Model United Nations</td></tr>${imageRows}
-        <tr><td class="email-pad email-copy" style="padding:34px 42px 38px;background:#FAF5ED;color:#203653;font-size:16px;line-height:1.7;">${bodyHtml}</td></tr>
-        <tr><td class="email-pad" style="padding:24px 42px;background:#003057;border-top:4px solid #30CDD7;color:#B4EBF5;font-size:12px;line-height:1.6;">
-          <strong style="display:block;color:#FAF5ED;font-size:14px;">Oakridge Model United Nations</strong>
-          <span style="display:block;margin-top:4px;">Reply to this email if you need clarification or support.</span>
-          <span style="display:block;margin-top:12px;color:#30CDD7;font-weight:700;">Oakridge International School · MUN Operations</span>
+        <tr><td class="email-pad" style="padding:30px 42px 27px;background:#B4EBF5;color:#003057;">
+          <span style="display:block;margin-bottom:10px;font-size:10px;font-weight:800;letter-spacing:1.7px;text-transform:uppercase;">Delegate dispatch</span>
+          <strong class="email-title" style="display:block;font-family:Georgia,'Times New Roman',serif;font-size:32px;line-height:1.12;letter-spacing:-.6px;">${safePreheader}</strong>
+          <span style="display:block;width:44px;height:3px;margin-top:18px;background:#087D88;font-size:0;line-height:0;">&nbsp;</span>
+        </td></tr>${imageRows("header")}
+        ${bodyIntroduction ? `<tr><td class="email-pad email-copy" style="padding:34px 42px 12px;background:#FAF5ED;color:#203653;font-size:16px;line-height:1.72;">${bodyIntroduction}</td></tr>` : ""}
+        ${imageRows("body")}
+        <tr><td class="email-pad email-copy" style="padding:${bodyIntroduction ? "12px" : "34px"} 42px 38px;background:#FAF5ED;color:#203653;font-size:16px;line-height:1.72;">${bodyRemainder}</td></tr>
+        ${imageRows("footer")}
+        <tr><td class="email-pad" style="padding:25px 42px;background:#003057;border-top:4px solid #30CDD7;color:#B4EBF5;font-size:12px;line-height:1.65;">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0"><tr>
+            <td valign="top"><strong style="display:block;color:#FAF5ED;font-size:14px;">Oakridge Model United Nations</strong><span style="display:block;margin-top:5px;">Reply directly for clarification or delegate support.</span></td>
+            <td valign="bottom" align="right" style="color:#30CDD7;font-size:10px;font-weight:800;letter-spacing:1px;text-transform:uppercase;">Oakridge International School<br><span style="color:#FAF5ED;">MUN Operations</span></td>
+          </tr></table>
         </td></tr>
       </table>
     </td></tr>

@@ -95,7 +95,13 @@ try {
   if (exerciseEmailImage) {
     await page.getByLabel("Upload campaign images").setInputFiles(emailImagePath);
     await page.getByText("oakridge-logo.png", { exact: true }).waitFor({ timeout: 30_000 });
-    await page.frameLocator(".branded-email-frame").locator('img[alt="oakridge logo"]').waitFor();
+    await page.getByLabel("Location for oakridge-logo.png").selectOption("body");
+    await page.getByLabel("Scale for oakridge-logo.png").selectOption("compact");
+    await page.getByLabel("Alignment for oakridge-logo.png").selectOption("right");
+    const configuredImage = page.frameLocator(".branded-email-frame").locator('img[alt="oakridge logo"]');
+    await configuredImage.waitFor();
+    if (await configuredImage.getAttribute("width") !== "320") throw new Error("Email image scale did not reach the delivered HTML preview.");
+    if (await configuredImage.locator("xpath=..").getAttribute("align") !== "right") throw new Error("Email image alignment did not reach the delivered HTML preview.");
     await page.screenshot({ path: path.join(evidenceDir, "03b-email-studio-image.png"), fullPage: true });
     await page.getByRole("button", { name: "Remove oakridge-logo.png" }).click();
     await page.getByText("oakridge-logo.png", { exact: true }).waitFor({ state: "detached", timeout: 30_000 });

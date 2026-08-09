@@ -13,7 +13,7 @@ import {
   summarizeProviderDeliveryInterruption,
   type ProviderResultCounts,
 } from "../../convex/lib/mailDelivery";
-import { buildGmailComposeUrl, buildOakridgeEmailHtml, matchRoutingRule, personalizeTemplate, unresolvedFieldsForRecipients } from "../domain/email";
+import { buildGmailComposeUrl, buildOakridgeEmailHtml, matchRoutingRule, personalizeTemplate, unresolvedFieldsForRecipients, type EmailImageAlignment, type EmailImagePlacement, type EmailImageWidth } from "../domain/email";
 import { emailAssetUploadEndpoint, formatImageSize, validateSelectedEmailImages } from "../domain/emailAssets";
 import { PageHeader } from "../components/PageHeader";
 import { RichEditor } from "../components/RichEditor";
@@ -43,6 +43,9 @@ type UploadedEmailImage = {
   contentType: string;
   size: number;
   alt: string;
+  placement: EmailImagePlacement;
+  width: EmailImageWidth;
+  alignment: EmailImageAlignment;
 };
 
 function emptyProviderResultCounts(): ProviderResultCounts {
@@ -148,7 +151,7 @@ export function EmailPage() {
     ? buildOakridgeEmailHtml({
         bodyHtml: DOMPurify.sanitize(previewBody.output),
         preheader: previewSubject.output,
-        images: emailImages.map(({ url, alt }) => ({ src: url, alt })),
+        images: emailImages.map(({ url, alt, placement, width, alignment }) => ({ src: url, alt, placement, width, alignment })),
       })
     : "";
   const routingRule = matchRoutingRule(testSubject, (rules ?? []).map((rule) => ({ ...rule, id: rule._id })));
@@ -225,6 +228,9 @@ export function EmailPage() {
           contentType: result.contentType!,
           size: result.size!,
           alt,
+          placement: current.length === 0 ? "header" : "body",
+          width: current.length === 0 ? "full" : "wide",
+          alignment: "center",
         }]);
       }
     } catch (cause) {
@@ -302,7 +308,7 @@ export function EmailPage() {
           contactIds: chunk.map((contact) => contact._id),
           subjectTemplate: subject,
           bodyHtmlTemplate: bodyHtml,
-          imageAssets: emailImages.map(({ id, alt }) => ({ assetId: id, alt })),
+          imageAssets: emailImages.map(({ id, alt, placement, width, alignment }) => ({ assetId: id, alt, placement, width, alignment })),
           confirmation: `SEND ${chunk.length}`,
         };
         const result = mailProvider === "google" ? await sendGoogleBatch(args) : await sendMicrosoftBatch(args);
@@ -422,12 +428,12 @@ export function EmailPage() {
           <section className="composer-panel">
             <div className="composer-heading"><div><p className="eyebrow">Step 2</p><h2>Write the message</h2></div><span className="sender-chip">From {sender}</span></div>
             <label className="subject-field">Subject<input value={subject} onChange={(event) => setSubject(event.target.value)} placeholder="What is this email about?" /></label>
-            <div className="merge-fields"><span>Personalize:</span>{mergeFields.map(([label, token]) => <button key={token} type="button" onClick={() => insertField(token)}>+ {label}</button>)}</div>
+            <div className="merge-fields"><span>Personalize content:</span>{mergeFields.map(([label, token]) => <button key={token} type="button" onClick={() => insertField(token)}>+ {label}</button>)}</div>
             <RichEditor value={bodyHtml} onChange={setBodyHtml} />
             <section className="email-media-panel" aria-labelledby="email-media-heading">
               <div className="email-media-heading">
                 <div className="email-media-icon"><FileImage aria-hidden="true" /></div>
-                <div><h3 id="email-media-heading">Campaign images</h3><p>Add up to three PNG, JPEG, or GIF images. They are embedded inside every email, not linked as fragile external files.</p></div>
+                <div><h3 id="email-media-heading">Image objects</h3><p>Add up to three embedded visuals, then place each as a lead, in-message, or closing object.</p></div>
                 <button className="button button--secondary" type="button" disabled={imageBusy || emailImages.length >= 3} onClick={() => imageInput.current?.click()}><ImagePlus aria-hidden="true" /> {imageBusy ? "Uploading…" : "Add images"}</button>
               </div>
               <input ref={imageInput} className="sr-only" type="file" accept="image/png,image/jpeg,image/gif" multiple aria-label="Upload campaign images" onChange={(event) => { if (event.target.files?.length) void uploadEmailImages([...event.target.files]); }} />
@@ -435,7 +441,15 @@ export function EmailPage() {
                 <div className="email-image-list">{emailImages.map((image, index) => (
                   <article key={image.id} className="email-image-item">
                     <img src={image.url} alt="" />
-                    <div className="email-image-copy"><strong>{image.fileName}</strong><small>{formatImageSize(image.size)} · Embedded image {index + 1}</small><label>Alternative text<input value={image.alt} maxLength={160} onChange={(event) => setEmailImages((current) => current.map((item) => item.id === image.id ? { ...item, alt: event.target.value } : item))} placeholder="Describe the image for recipients who cannot see it" /></label></div>
+                    <div className="email-image-copy">
+                      <strong>{image.fileName}</strong><small>{formatImageSize(image.size)} · Image object {index + 1}</small>
+                      <label>Alternative text<input value={image.alt} maxLength={160} onChange={(event) => setEmailImages((current) => current.map((item) => item.id === image.id ? { ...item, alt: event.target.value } : item))} placeholder="Describe the image for recipients who cannot see it" /></label>
+                      <div className="email-object-controls">
+                        <label>Location<select aria-label={`Location for ${image.fileName}`} value={image.placement} onChange={(event) => setEmailImages((current) => current.map((item) => item.id === image.id ? { ...item, placement: event.target.value as EmailImagePlacement } : item))}><option value="header">Lead</option><option value="body">Body</option><option value="footer">End</option></select></label>
+                        <label>Scale<select aria-label={`Scale for ${image.fileName}`} value={image.width} onChange={(event) => setEmailImages((current) => current.map((item) => item.id === image.id ? { ...item, width: event.target.value as EmailImageWidth } : item))}><option value="full">Full</option><option value="wide">Wide</option><option value="compact">Small</option></select></label>
+                        <label>Align<select aria-label={`Alignment for ${image.fileName}`} value={image.alignment} onChange={(event) => setEmailImages((current) => current.map((item) => item.id === image.id ? { ...item, alignment: event.target.value as EmailImageAlignment } : item))}><option value="left">Left</option><option value="center">Center</option><option value="right">Right</option></select></label>
+                      </div>
+                    </div>
                     <button className="icon-button icon-button--danger" type="button" disabled={imageBusy || busy || deliveryCounts.unknown > 0 || deliveryCounts.inProgress > 0} onClick={() => void deleteEmailImage(image.id)} aria-label={`Remove ${image.fileName}`}><Trash2 aria-hidden="true" /></button>
                   </article>
                 ))}</div>

@@ -31,6 +31,26 @@ describe("buildOakridgeEmailHtml", () => {
     expect(html).not.toContain("Clear communication. Thoughtful diplomacy. One community.");
     expect(html).toContain('alt="" style="display:block;width:52px');
   });
+
+  it("places configurable image objects in lead, message, and closing zones", () => {
+    const html = buildOakridgeEmailHtml({
+      bodyHtml: "<p>Opening note.</p><p>Detailed instructions.</p>",
+      preheader: "Committee briefing",
+      images: [
+        { src: "cid:lead", alt: "Lead visual", placement: "header", width: "full", alignment: "center" },
+        { src: "cid:message", alt: "Committee room", placement: "body", width: "compact", alignment: "right" },
+        { src: "cid:closing", alt: "Closing assembly", placement: "footer", width: "wide", alignment: "left" },
+      ],
+    });
+
+    expect(html.indexOf('src="cid:lead"')).toBeLessThan(html.indexOf("Opening note."));
+    expect(html.indexOf("Opening note.")).toBeLessThan(html.indexOf('src="cid:message"'));
+    expect(html.indexOf('src="cid:message"')).toBeLessThan(html.indexOf("Detailed instructions."));
+    expect(html.indexOf("Detailed instructions.")).toBeLessThan(html.indexOf('src="cid:closing"'));
+    expect(html).toContain('width="320"');
+    expect(html).toContain('align="right"');
+    expect(html).toContain("Delegate dispatch");
+  });
 });
 
 describe("buildGraphSendMailPayload", () => {

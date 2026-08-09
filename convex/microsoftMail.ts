@@ -125,7 +125,13 @@ export const sendPersonalizedBatch = action({
     contactIds: v.array(v.id("contacts")),
     subjectTemplate: v.string(),
     bodyHtmlTemplate: v.string(),
-    imageAssets: v.optional(v.array(v.object({ assetId: v.id("emailAssets"), alt: v.string() }))),
+    imageAssets: v.optional(v.array(v.object({
+      assetId: v.id("emailAssets"),
+      alt: v.string(),
+      placement: v.optional(v.union(v.literal("header"), v.literal("body"), v.literal("footer"))),
+      width: v.optional(v.union(v.literal("full"), v.literal("wide"), v.literal("compact"))),
+      alignment: v.optional(v.union(v.literal("left"), v.literal("center"), v.literal("right"))),
+    }))),
     confirmation: v.string(),
   },
   handler: async (ctx, args): Promise<{

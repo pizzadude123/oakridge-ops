@@ -72,6 +72,18 @@ export function inlineImageIdentity(index: number, contentType: MailSafeImageTyp
   };
 }
 
-export function emailAssetCampaignMaterial(assets: Array<{ sha256: string; alt: string }>) {
-  return JSON.stringify(assets.map(({ sha256, alt }) => ({ sha256, alt })));
+export function emailAssetCampaignMaterial(assets: Array<{
+  sha256: string;
+  alt: string;
+  placement?: "header" | "body" | "footer";
+  width?: "full" | "wide" | "compact";
+  alignment?: "left" | "center" | "right";
+}>) {
+  return JSON.stringify(assets.map(({ sha256, alt, placement = "body", width = "wide", alignment = "center" }) => ({
+    sha256,
+    alt,
+    placement,
+    width,
+    alignment,
+  })));
 }

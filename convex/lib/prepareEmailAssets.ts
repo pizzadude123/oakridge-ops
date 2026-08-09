@@ -1,7 +1,7 @@
 import type { Id } from "../_generated/dataModel";
 import type { ActionCtx } from "../_generated/server";
 import { internal } from "../_generated/api";
-import type { EmailLayoutImage, InlineEmailImage } from "../../src/domain/email";
+import type { EmailImageAlignment, EmailImagePlacement, EmailImageWidth, EmailLayoutImage, InlineEmailImage } from "../../src/domain/email";
 import {
   emailAssetCampaignMaterial,
   inlineImageIdentity,
@@ -12,6 +12,9 @@ import {
 export type EmailAssetRequest = {
   assetId: Id<"emailAssets">;
   alt: string;
+  placement?: EmailImagePlacement;
+  width?: EmailImageWidth;
+  alignment?: EmailImageAlignment;
 };
 
 function cleanAlt(value: string, index: number) {
@@ -47,9 +50,14 @@ export async function prepareEmailAssets(
     };
   }));
   const altText = requests.map(({ alt }, index) => cleanAlt(alt, index));
+  const layout = requests.map((request) => ({
+    placement: request.placement ?? "body",
+    width: request.width ?? "wide",
+    alignment: request.alignment ?? "center",
+  }));
   return {
     inlineImages,
-    layoutImages: inlineImages.map(({ contentId }, index) => ({ src: `cid:${contentId}`, alt: altText[index] })),
-    campaignMaterial: emailAssetCampaignMaterial(assets.map((asset, index) => ({ sha256: asset.sha256, alt: altText[index] }))),
+    layoutImages: inlineImages.map(({ contentId }, index) => ({ src: `cid:${contentId}`, alt: altText[index], ...layout[index] })),
+    campaignMaterial: emailAssetCampaignMaterial(assets.map((asset, index) => ({ sha256: asset.sha256, alt: altText[index], ...layout[index] }))),
   };
 }
