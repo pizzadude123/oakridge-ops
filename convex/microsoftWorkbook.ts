@@ -10,7 +10,7 @@ import { buildWorkbookSnapshot, encodeGraphShareUrl } from "./lib/workbookMonito
 import { decryptGraphSecret, encryptGraphSecret } from "./lib/graphCrypto";
 import { extractAllocationRows } from "../src/domain/operations";
 
-const GRAPH_SCOPES = "openid profile offline_access User.Read Mail.Read Mail.Send Files.Read";
+const GRAPH_SCOPES = "openid profile offline_access User.Read Mail.Read Files.Read";
 const MAX_WORKBOOK_BYTES = 25 * 1024 * 1024;
 
 function requiredEnv(name: string) {

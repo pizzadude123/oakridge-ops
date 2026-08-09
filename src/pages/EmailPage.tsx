@@ -1,7 +1,7 @@
 import DOMPurify from "dompurify";
 import { useMemo, useRef, useState } from "react";
-import { useAction, useMutation, useQuery } from "convex/react";
-import { Check, ChevronRight, ExternalLink, FileUp, Filter, MailCheck, Route, Save, Send, ShieldCheck, Sparkles, Users } from "lucide-react";
+import { useMutation, useQuery } from "convex/react";
+import { Check, ChevronRight, ExternalLink, FileUp, Filter, MailCheck, Route, Save, Send, Sparkles, Users } from "lucide-react";
 import clsx from "clsx";
 import { api } from "../../convex/_generated/api";
 import type { Doc } from "../../convex/_generated/dataModel";
@@ -42,14 +42,12 @@ export function EmailPage() {
   const contacts = useQuery(api.contacts.list);
   const rules = useQuery(api.routingRules.list);
   const messages = useQuery(api.messages.recent);
-  const graphStatus = useQuery(api.graphData.status);
+
   const saveDraft = useMutation(api.messages.saveDraft);
   const markStatus = useMutation(api.messages.markStatus);
   const saveRule = useMutation(api.routingRules.save);
   const importPeople = useMutation(api.contacts.importPeople);
-  const sendPersonalizedBatch = useAction(api.microsoftMail.sendPersonalizedBatch);
   const fileInput = useRef<HTMLInputElement>(null);
-  const sendDialog = useRef<HTMLDialogElement>(null);
   const [tab, setTab] = useState<Tab>("write");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [peopleFilter, setPeopleFilter] = useState<"all" | "unpaid" | "outstanding">("all");
@@ -57,7 +55,7 @@ export function EmailPage() {
   const [bodyHtml, setBodyHtml] = useState(DEFAULT_BODY);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
-  const [sendConfirmed, setSendConfirmed] = useState(false);
+
   const [testSubject, setTestSubject] = useState("Allocation question from a delegate");
 
   const visibleContacts = useMemo(() => (contacts ?? []).filter((contact) =>
@@ -70,7 +68,7 @@ export function EmailPage() {
   const previewSubject = previewContact ? personalizeTemplate(subject, contactFields(previewContact)) : null;
   const previewBody = previewContact ? personalizeTemplate(bodyHtml, contactFields(previewContact), "html") : null;
   const unresolved = [...new Set([...(previewSubject?.unresolved ?? []), ...(previewBody?.unresolved ?? [])])];
-  const sender = graphStatus?.connected && graphStatus.email ? graphStatus.email : "Outlook not connected";
+  const sender = SENDER;
   const previewDocument = previewBody && previewSubject
     ? buildOakridgeEmailHtml({ bodyHtml: DOMPurify.sanitize(previewBody.output), preheader: previewSubject.output })
     : "";
@@ -104,47 +102,6 @@ export function EmailPage() {
     }
   }
 
-  function reviewSend() {
-    setNotice("");
-    setSendConfirmed(false);
-    if (!graphStatus?.connected) {
-      setNotice("Connect Microsoft Outlook from Inbox before sending. You can still save drafts now.");
-      return;
-    }
-    sendDialog.current?.showModal();
-  }
-
-  async function sendNow() {
-    if (!sendConfirmed || !selectedContacts.length) return;
-    setBusy(true); setNotice("");
-    try {
-      const campaignId = crypto.randomUUID().replaceAll("-", "_");
-      let accepted = 0;
-      let failed = 0;
-      let skipped = 0;
-      const failures: string[] = [];
-      for (let offset = 0; offset < selectedContacts.length; offset += 50) {
-        const chunk = selectedContacts.slice(offset, offset + 50);
-        const result = await sendPersonalizedBatch({
-          contactIds: chunk.map((contact) => contact._id),
-          subjectTemplate: subject,
-          bodyHtmlTemplate: bodyHtml,
-          batchId: `${campaignId}_${Math.floor(offset / 50)}`,
-          confirmation: `SEND ${chunk.length}`,
-        });
-        accepted += result.accepted;
-        failed += result.failed;
-        skipped += result.skipped;
-        failures.push(...result.failures);
-      }
-      sendDialog.current?.close();
-      const summary = `${accepted} ${accepted === 1 ? "email was" : "emails were"} accepted by Outlook${failed ? `; ${failed} failed` : ""}${skipped ? `; ${skipped} duplicate sends were skipped` : ""}.`;
-      setNotice(failures.length ? `${summary} ${failures.slice(0, 3).join(" · ")}` : summary);
-      setTab("history");
-    } catch (cause) {
-      setNotice(cause instanceof Error ? cause.message : "Outlook could not send this email batch.");
-    } finally { setBusy(false); }
-  }
 
   function openDraft(contact: Doc<"contacts">, message?: Doc<"messages">) {
     const fields = contactFields(contact);
@@ -180,7 +137,7 @@ export function EmailPage() {
 
   return (
     <div className="page">
-      <PageHeader eyebrow="Email studio" title="Write once. Make it personal." description={graphStatus?.connected ? `Ready to send from ${sender}. Every person receives an individual, personalized copy.` : "Import people, write visually, and preview every personalized version. Connect Outlook from Inbox when you are ready to send."} />
+      <PageHeader eyebrow="Email studio" title="Write once. Make it personal." description={`Import people, personalize every copy, and prepare reviewed Gmail drafts from ${SENDER}.`} />
       <div className="tab-bar" role="tablist" aria-label="Email tools">
         <button role="tab" aria-selected={tab === "write"} className={tab === "write" ? "is-active" : ""} onClick={() => setTab("write")}><Sparkles aria-hidden="true" /> Write</button>
         <button role="tab" aria-selected={tab === "routing"} className={tab === "routing" ? "is-active" : ""} onClick={() => setTab("routing")}><Route aria-hidden="true" /> Routing rules</button>
@@ -209,11 +166,11 @@ export function EmailPage() {
           </section>
 
           <section className="composer-panel">
-            <div className="composer-heading"><div><p className="eyebrow">Step 2</p><h2>Write the message</h2></div><span className={clsx("sender-chip", !graphStatus?.connected && "sender-chip--offline")}>From {sender}</span></div>
+            <div className="composer-heading"><div><p className="eyebrow">Step 2</p><h2>Write the message</h2></div><span className="sender-chip">From {sender}</span></div>
             <label className="subject-field">Subject<input value={subject} onChange={(event) => setSubject(event.target.value)} placeholder="What is this email about?" /></label>
             <div className="merge-fields"><span>Personalize:</span>{mergeFields.map(([label, token]) => <button key={token} type="button" onClick={() => insertField(token)}>+ {label}</button>)}</div>
             <RichEditor value={bodyHtml} onChange={setBodyHtml} />
-            <div className="composer-footer"><div><strong>{selected.size || 0} personalized email{selected.size === 1 ? "" : "s"}</strong><small>Individually addressed—never a visible bulk list.</small></div><div className="composer-actions"><button className="button button--ghost" type="button" disabled={!selected.size || busy || unresolved.length > 0} onClick={() => void prepareDrafts()}><Save aria-hidden="true" /> Save drafts</button><button className="button button--primary" type="button" disabled={!selected.size || busy || unresolved.length > 0} onClick={reviewSend}><Send aria-hidden="true" /> Review &amp; send</button></div></div>
+            <div className="composer-footer"><div><strong>{selected.size || 0} personalized draft{selected.size === 1 ? "" : "s"}</strong><small>Individually addressed—never a visible bulk list.</small></div><button className="button button--primary" type="button" disabled={!selected.size || busy || unresolved.length > 0} onClick={() => void prepareDrafts()}><Save aria-hidden="true" /> {busy ? "Preparing…" : "Prepare Gmail drafts"}</button></div>
 
           </section>
 
@@ -222,7 +179,7 @@ export function EmailPage() {
             {previewContact && previewBody && previewSubject ? (
               <div className="email-preview email-preview--branded">
                 <div className="preview-addresses"><span><small>From</small>{sender}</span><span><small>To</small>{previewContact.email}</span><span><small>Subject</small><strong>{previewSubject.output}</strong></span></div>
-                {unresolved.length > 0 && <div className="inline-alert inline-alert--warning" role="alert">Add {unresolved.map((field) => `{{${field}}}`).join(", ")} to {previewContact.fullName} before sending.</div>}
+                {unresolved.length > 0 && <div className="inline-alert inline-alert--warning" role="alert">Add {unresolved.map((field) => `{{${field}}}`).join(", ")} to {previewContact.fullName} before opening Gmail.</div>}
                 <iframe className="branded-email-frame" title={`Email preview for ${previewContact.fullName}`} sandbox="" srcDoc={previewDocument} />
               </div>
             ) : <div className="empty-state"><Users aria-hidden="true" /><h3>Choose a person</h3><p>Their personalized email will appear here.</p></div>}
@@ -246,8 +203,8 @@ export function EmailPage() {
 
       {tab === "history" && (
         <section className="data-panel">
-          <div className="data-panel-heading"><div><p className="eyebrow">Delivery record</p><h2>Email history</h2><p>Outlook messages are marked sent only after Microsoft Graph accepts them. Manual Gmail drafts remain clearly labeled.</p></div></div>
-          {!messages ? <div className="page-loader">Loading…</div> : messages.length === 0 ? <div className="empty-state"><MailCheck aria-hidden="true" /><h3>No email history yet</h3><p>Save a draft or send a reviewed Outlook batch and it will appear here.</p></div> : <div className="message-history">{messages.map((message) => {
+          <div className="data-panel-heading"><div><p className="eyebrow">Saved safely</p><h2>Email history</h2><p>“Opened in Gmail” is not the same as sent. Mark it sent only after Gmail confirms.</p></div></div>
+          {!messages ? <div className="page-loader">Loading…</div> : messages.length === 0 ? <div className="empty-state"><MailCheck aria-hidden="true" /><h3>No drafts yet</h3><p>Prepare a personalized message and it will appear here.</p></div> : <div className="message-history">{messages.map((message) => {
             const contact = contacts?.find((item) => item._id === message.contactId);
             const graphMessage = message.provider === "microsoft_graph";
             return <article key={message._id}><div><strong>{message.recipientName}</strong><small>{message.recipientEmail}</small></div><div className="message-subject"><strong>{message.subject}</strong><small>{new Intl.DateTimeFormat("en-IN", { dateStyle: "medium", timeStyle: "short" }).format(message.createdAt)}{message.providerError ? ` · ${message.providerError}` : ""}</small></div><StatusBadge status={message.status} /><div className="history-actions">{graphMessage ? <span className="provider-label">Microsoft Graph</span> : <>{contact && <button type="button" className="button button--ghost" onClick={() => openDraft(contact, message)}><ExternalLink aria-hidden="true" /> Open</button>}<button type="button" className="button button--secondary" disabled={message.status === "sent"} onClick={() => void markStatus({ id: message._id, status: "sent" })}><Check aria-hidden="true" /> Mark sent</button></>}</div></article>;
@@ -255,18 +212,7 @@ export function EmailPage() {
         </section>
       )}
 
-      <dialog ref={sendDialog} className="modal email-send-dialog" aria-labelledby="send-dialog-title">
-        <form method="dialog">
-          <div className="send-dialog-icon"><ShieldCheck aria-hidden="true" /></div>
-          <p className="eyebrow">Final review</p>
-          <h2 id="send-dialog-title">Send {selectedContacts.length} personalized {selectedContacts.length === 1 ? "email" : "emails"}?</h2>
-          <p>Each person receives a separate Oakridge-branded message from your connected Outlook account. Recipient addresses are never exposed to one another.</p>
-          <dl className="send-review-summary"><div><dt>From</dt><dd>{sender}</dd></div><div><dt>Subject</dt><dd>{previewSubject?.output || subject}</dd></div><div><dt>Recipients</dt><dd>{selectedContacts.length}</dd></div></dl>
-          <div className="send-review-people">{selectedContacts.slice(0, 4).map((contact) => <span key={contact._id}>{contact.fullName} <small>{contact.email}</small></span>)}{selectedContacts.length > 4 && <span>+ {selectedContacts.length - 4} more</span>}</div>
-          <label className="send-confirmation"><input type="checkbox" checked={sendConfirmed} onChange={(event) => setSendConfirmed(event.target.checked)} /><span>I reviewed the subject, message, personalization, and recipient count.</span></label>
-          <div className="modal-actions"><button className="button button--ghost" type="submit" disabled={busy}>Cancel</button><button className="button button--primary" type="button" disabled={!sendConfirmed || busy} onClick={() => void sendNow()}><Send aria-hidden="true" /> {busy ? "Sending…" : `Send ${selectedContacts.length} now`}</button></div>
-        </form>
-      </dialog>
+
     </div>
   );
 }

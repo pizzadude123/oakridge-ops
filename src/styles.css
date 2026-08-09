@@ -552,7 +552,7 @@ td { padding: 14px 12px; border-top: 1px solid var(--line); vertical-align: midd
   .sidebar-close { display: grid; width: 40px; height: 40px; place-items: center; }
   .nav-scrim { position: fixed; z-index: 40; inset: 0; display: block; border: 0; background: rgba(7, 32, 64, .55); }
   .mobile-menu-button { position: fixed; z-index: 35; top: 14px; right: 15px; display: grid; width: 43px; height: 43px; place-items: center; border: 1px solid var(--line); border-radius: 11px; color: var(--blue-dark); background: #fff; box-shadow: var(--shadow-sm); }
-  .mobile-brand { display: flex; height: 70px; align-items: center; gap: 10px; padding: 12px 76px 12px 18px; border-bottom: 1px solid var(--line); background: rgba(255,253,248,.92); }
+  .mobile-brand { position: sticky; z-index: 30; top: 0; display: flex; height: 70px; align-items: center; gap: 10px; padding: 12px 76px 12px 18px; border-bottom: 1px solid var(--line); background: rgba(255,253,248,.96); backdrop-filter: blur(12px); }
   .mobile-brand img { width: 40px; height: 40px; object-fit: contain; }
   .mobile-brand strong, .mobile-brand small { display: block; }
   .mobile-brand strong { font-size: .78rem; }

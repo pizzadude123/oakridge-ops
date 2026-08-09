@@ -99,9 +99,9 @@ export function InboxPage() {
           <div>
             <p className="eyebrow">One-time connection</p>
             <h2>Connect the Oakridge Microsoft inbox</h2>
-            <p>Microsoft will ask you to choose the school account and approve inbox reading, reviewed email sending, and selected-file access. Your password and MFA stay on Microsoft’s sign-in page.</p>
+            <p>Microsoft will ask you to choose the school account and approve read-only inbox and selected-file access. Your password and MFA stay on Microsoft’s sign-in page.</p>
             <ul className="permission-list">
-              <li><ShieldCheck aria-hidden="true" /><span><strong>Mail access</strong><small>Uses delegated <code>Mail.Read</code> and <code>Mail.Send</code>. Sending happens only after the final Email Studio review; messages are never deleted or moved.</small></span></li>
+              <li><ShieldCheck aria-hidden="true" /><span><strong>Read only</strong><small>Uses delegated <code>Mail.Read</code>; it does not send, delete, or move messages.</small></span></li>
               <li><FileCheck2 aria-hidden="true" /><span><strong>Selected workbook</strong><small>Uses delegated <code>Files.Read</code> so Excel Checks can monitor a workbook you explicitly link.</small></span></li>
               <li><Workflow aria-hidden="true" /><span><strong>Two-hour watcher</strong><small>Convex refreshes the inbox even when this page is closed.</small></span></li>
               <li><Link2 aria-hidden="true" /><span><strong>Private synchronization</strong><small>Refresh tokens are encrypted server-side and never exposed to the browser.</small></span></li>

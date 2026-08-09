@@ -79,7 +79,7 @@ try {
   await page.frameLocator(".branded-email-frame").getByText("Oakridge MUN", { exact: true }).first().waitFor();
   await page.screenshot({ path: path.join(evidenceDir, "03-email-studio.png"), fullPage: true });
   const emailComposerAxe = await axe("Email composer");
-  await page.getByRole("button", { name: "Save drafts" }).click();
+  await page.getByRole("button", { name: "Prepare Gmail drafts" }).click();
   await page.getByRole("heading", { name: "Email history" }).waitFor();
   await page.getByText("An update from Oakridge MUN", { exact: true }).first().waitFor();
   await page.screenshot({ path: path.join(evidenceDir, "04-email-history.png"), fullPage: true });
@@ -134,16 +134,26 @@ try {
   await page.getByRole("button", { name: "Open navigation" }).click();
   await page.getByRole("link", { name: "Email", exact: true }).click();
   await page.getByRole("heading", { name: "Write once. Make it personal." }).waitFor();
+  await page.waitForTimeout(250);
+  const mobileNavigation = await page.locator(".sidebar").evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    return { right: rect.right, scrimVisible: Boolean(document.querySelector(".nav-scrim")) };
+  });
+  if (mobileNavigation.right > 1 || mobileNavigation.scrimVisible) throw new Error("Mobile navigation did not close after route selection.");
   const emailMobileOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   if (emailMobileOverflow > 1) throw new Error(`Mobile Email Studio has ${emailMobileOverflow}px horizontal overflow.`);
-  await page.screenshot({ path: path.join(evidenceDir, "08-email-mobile.png"), fullPage: true });
+  await page.screenshot({ path: path.join(evidenceDir, "08-email-mobile.png") });
   const emailMobileAxe = await axe("Mobile Email Studio");
+  await page.locator(".preview-panel").scrollIntoViewIfNeeded();
+  await page.frameLocator(".branded-email-frame").getByText("Oakridge MUN", { exact: true }).first().waitFor();
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: path.join(evidenceDir, "09-email-preview-mobile.png") });
 
   if (consoleErrors.length) throw new Error(`Browser errors: ${consoleErrors.join(" | ")}`);
   console.log(JSON.stringify({
     passed: true,
     firstRun,
-    screenshots: 9,
+    screenshots: 11,
     axeNonBlockingViolations: { signInAxe, dashboardAxe, inboxAxe, contactsAxe, emailComposerAxe, emailAxe, formsAxe, excelAxe, mobileAxe, emailMobileAxe },
     workbookExercised: existsSync(workbookPath),
     passwordFile: ".admin-password (mode 0600; value not printed)",

@@ -3,7 +3,7 @@ import type { Id } from "./_generated/dataModel";
 import { httpAction } from "./_generated/server";
 import { decryptGraphSecret, encryptGraphSecret } from "./lib/graphCrypto";
 
-const SCOPES = "openid profile offline_access User.Read Mail.Read Mail.Send Files.Read";
+const SCOPES = "openid profile offline_access User.Read Mail.Read Files.Read";
 
 function requiredEnv(name: string) {
   const value = process.env[name];

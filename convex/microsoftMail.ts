@@ -10,7 +10,7 @@ import { buildGraphSendMailPayload, buildOakridgeEmailHtml, personalizeTemplate 
 import { decryptGraphSecret, encryptGraphSecret } from "./lib/graphCrypto";
 import { sanitizeEditorHtml } from "./lib/mailContent";
 
-const GRAPH_SCOPES = "openid profile offline_access User.Read Mail.Read Mail.Send Files.Read";
+const GRAPH_SCOPES = "openid profile offline_access User.Read Mail.Read Files.Read";
 const MAX_RECIPIENTS_PER_REQUEST = 50;
 
 function requiredEnv(name: string) {

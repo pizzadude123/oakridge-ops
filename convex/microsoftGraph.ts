@@ -5,7 +5,7 @@ import type { Id } from "./_generated/dataModel";
 import { action, internalAction } from "./_generated/server";
 import { decryptGraphSecret, encryptGraphSecret, randomBase64Url, sha256Base64Url } from "./lib/graphCrypto";
 
-const GRAPH_SCOPES = ["openid", "profile", "offline_access", "User.Read", "Mail.Read", "Mail.Send", "Files.Read"];
+const GRAPH_SCOPES = ["openid", "profile", "offline_access", "User.Read", "Mail.Read", "Files.Read"];
 
 function requiredEnv(name: string) {
   const value = process.env[name];

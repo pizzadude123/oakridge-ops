@@ -1,12 +1,12 @@
 import { useAuthActions } from "@convex-dev/auth/react";
-import { useQuery } from "convex/react";
 import gsap from "gsap";
 import { BarChart3, BookOpenCheck, ContactRound, Home, Inbox, LogOut, Mail, Menu, X } from "lucide-react";
 import { useLayoutEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import clsx from "clsx";
-import { api } from "../../convex/_generated/api";
 import { oakridgeLogoUrl } from "../lib/assets";
+
+const PRIMARY_SENDER = "nagapranayimmadi@gmail.com";
 
 const navigation = [
   { to: "/", label: "Home", icon: Home, end: true },
@@ -19,11 +19,10 @@ const navigation = [
 
 export function AppShell() {
   const { signOut } = useAuthActions();
-  const graphStatus = useQuery(api.graphData.status);
   const location = useLocation();
   const main = useRef<HTMLElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
-  const sender = graphStatus?.connected && graphStatus.email ? graphStatus.email : "Outlook not connected";
+
 
   useLayoutEffect(() => {
     const content = main.current?.firstElementChild;
@@ -56,7 +55,7 @@ export function AppShell() {
         </nav>
         <div className="sidebar-account">
           <span>Sending from</span>
-          <strong title={sender}>{sender}</strong>
+          <strong title={PRIMARY_SENDER}>{PRIMARY_SENDER}</strong>
           <button type="button" onClick={() => void signOut()}><LogOut aria-hidden="true" /> Sign out</button>
         </div>
       </aside>
