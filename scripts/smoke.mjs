@@ -51,6 +51,12 @@ try {
   await page.screenshot({ path: path.join(evidenceDir, "01-dashboard-desktop.png"), fullPage: true });
   const dashboardAxe = await axe("Dashboard");
 
+  await page.getByRole("link", { name: "Inbox", exact: true }).click();
+  await page.getByRole("heading", { name: "Read, route, and keep the inbox current" }).waitFor();
+  await page.getByRole("button", { name: "Connect Microsoft Outlook" }).waitFor();
+  await page.screenshot({ path: path.join(evidenceDir, "02-inbox-disconnected.png"), fullPage: true });
+  const inboxAxe = await axe("Microsoft inbox");
+
   await page.getByRole("link", { name: "Contacts" }).click();
   await page.getByRole("heading", { name: "Contacts" }).waitFor();
   await page.getByText(/nagapranayimmadi@gmail\.com/).first().waitFor();
@@ -113,8 +119,8 @@ try {
   console.log(JSON.stringify({
     passed: true,
     firstRun,
-    screenshots: 6,
-    axeNonBlockingViolations: { dashboardAxe, contactsAxe, emailAxe, formsAxe, excelAxe, mobileAxe },
+    screenshots: 7,
+    axeNonBlockingViolations: { dashboardAxe, inboxAxe, contactsAxe, emailAxe, formsAxe, excelAxe, mobileAxe },
     workbookExercised: existsSync(workbookPath),
     passwordFile: ".admin-password (mode 0600; value not printed)",
   }, null, 2));

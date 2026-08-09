@@ -1,16 +1,17 @@
-import { useEffect, useRef } from "react";
+import { lazy, Suspense, useEffect, useRef } from "react";
 import { Authenticated, AuthLoading, Unauthenticated, useMutation, useQuery } from "convex/react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { api } from "../convex/_generated/api";
 import { AppShell } from "./components/AppShell";
 import { SignIn } from "./components/SignIn";
-import { ContactsPage } from "./pages/ContactsPage";
-import { DashboardPage } from "./pages/DashboardPage";
-import { EmailPage } from "./pages/EmailPage";
-import { ExcelPage } from "./pages/ExcelPage";
 import { oakridgeLogoUrl } from "./lib/assets";
-import { FormsPage } from "./pages/FormsPage";
-import { InboxPage } from "./pages/InboxPage";
+
+const ContactsPage = lazy(() => import("./pages/ContactsPage").then((module) => ({ default: module.ContactsPage })));
+const DashboardPage = lazy(() => import("./pages/DashboardPage").then((module) => ({ default: module.DashboardPage })));
+const EmailPage = lazy(() => import("./pages/EmailPage").then((module) => ({ default: module.EmailPage })));
+const ExcelPage = lazy(() => import("./pages/ExcelPage").then((module) => ({ default: module.ExcelPage })));
+const FormsPage = lazy(() => import("./pages/FormsPage").then((module) => ({ default: module.FormsPage })));
+const InboxPage = lazy(() => import("./pages/InboxPage").then((module) => ({ default: module.InboxPage })));
 
 function Workspace() {
   const status = useQuery(api.workspace.status);
@@ -38,6 +39,7 @@ function Workspace() {
   }
 
   return (
+    <Suspense fallback={<div className="page-loader"><span className="spinner" /> Loading workspace…</div>}>
     <Routes>
       <Route element={<AppShell gmailSender={status.settings?.gmailSender ?? "nagapranayimmadi@gmail.com"} />}>
         <Route index element={<DashboardPage />} />
@@ -49,6 +51,7 @@ function Workspace() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>
+    </Suspense>
   );
 }
 

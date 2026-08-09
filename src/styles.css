@@ -411,7 +411,7 @@ td { padding: 14px 12px; border-top: 1px solid var(--line); vertical-align: midd
 .permission-list strong, .permission-list small { display: block; }
 .permission-list strong { font-size: .72rem; }
 .permission-list small { margin-top: 2px; color: var(--muted); font-size: .6rem; line-height: 1.45; }
-.permission-list code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .58rem; }
+.permission-list code { color: #44566c; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .6rem; }
 .graph-status-panel { display: grid; grid-template-columns: minmax(260px, 1fr) minmax(420px, 1.4fr) auto; align-items: center; gap: 28px; padding: 22px 26px; margin-top: 28px; border: 1px solid #b8d8c7; border-radius: 16px; background: #f1faf5; box-shadow: var(--shadow-sm); }
 .graph-identity { display: flex; align-items: center; gap: 14px; }
 .graph-identity > span { display: grid; width: 44px; height: 44px; flex: none; place-items: center; border-radius: 12px; color: #0e613d; background: #d9f1e4; }
