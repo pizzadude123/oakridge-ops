@@ -26,7 +26,8 @@
 .auth-story::after { border-color: rgba(250,245,237,.18); box-shadow: 0 0 0 80px rgba(250,245,237,.035), 0 0 0 160px rgba(250,245,237,.02); }
 .auth-copy p:not(.eyebrow), .auth-promises li { color: rgba(250,245,237,.84); }
 .auth-promises svg, .eyebrow--light { color: var(--cyan); }
-.brand-mark, .auth-form { background: var(--beige); }
+.brand-mark { width: 64px; height: 64px; padding: 0; border-radius: 0; background: transparent; }
+.auth-form { background: var(--beige); }
 .auth-form { color: var(--blue); border-color: rgba(0,48,87,.25); border-radius: 2px; box-shadow: 12px 12px 0 rgba(48,205,215,.28); }
 .auth-form > label, .modal-form label, .subject-field { color: var(--blue); }
 .brand-lockup--light, .brand-lockup--light small { color: var(--beige); }
