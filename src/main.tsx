@@ -8,6 +8,7 @@ import { HashRouter } from "react-router-dom";
 import App from "./App";
 import { oakridgeLogoUrl } from "./lib/assets";
 import "./styles.css";
+import "./brand-guidelines.css";
 
 const convexUrl = import.meta.env.VITE_CONVEX_URL as string | undefined;
 const convex = convexUrl ? new ConvexReactClient(convexUrl) : null;

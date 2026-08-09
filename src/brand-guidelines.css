@@ -1,0 +1,135 @@
+/* Oakridge Brand Identity Guidelines — colour and panel implementation.
+   Primary: Navy #003057 + Teal #30CDD7
+   Secondary neutral: Warm White #FAF5ED */
+
+.workspace, .workspace > main { background: var(--blue); }
+.page { color: var(--beige); }
+.page-header h1 { color: var(--beige); }
+.page-header p:not(.eyebrow) { color: rgba(250, 245, 237, .82); }
+.page-header .eyebrow { color: var(--cyan); }
+.page-loader { color: var(--beige); }
+.page-actions .button--primary { color: var(--blue); border-color: var(--beige); background: var(--beige); box-shadow: none; }
+.page-actions .button--primary:hover:not(:disabled) { color: var(--blue); background: var(--blue-soft); }
+
+.button--primary { color: var(--beige); background: var(--blue); box-shadow: 0 8px 22px rgba(0, 48, 87, .20); }
+.button--primary:hover:not(:disabled) { color: var(--beige); background: var(--blue); box-shadow: inset 0 -4px 0 var(--cyan), 0 10px 25px rgba(0, 48, 87, .26); }
+.button--secondary, .icon-button { color: var(--blue); border-color: rgba(0, 48, 87, .28); background: var(--beige); }
+.button--secondary:hover:not(:disabled), .icon-button:hover { border-color: var(--plum); background: var(--blue-soft); }
+.button--ghost { color: var(--blue); border-color: rgba(0, 48, 87, .28); }
+.text-button { color: var(--blue); }
+.tab-bar { border-color: var(--cyan); border-radius: 2px; background: var(--beige); }
+.tab-bar button { color: var(--blue); }
+.tab-bar button.is-active { color: var(--blue); background: var(--blue-soft); }
+
+.auth-page, .auth-form-panel { background: var(--beige); }
+.auth-story { color: var(--beige); background: linear-gradient(90deg, var(--cyan) 0 12px, var(--blue) 12px); }
+.auth-story::after { border-color: rgba(250,245,237,.18); box-shadow: 0 0 0 80px rgba(250,245,237,.035), 0 0 0 160px rgba(250,245,237,.02); }
+.auth-copy p:not(.eyebrow), .auth-promises li { color: rgba(250,245,237,.84); }
+.auth-promises svg, .eyebrow--light { color: var(--cyan); }
+.brand-mark, .auth-form { background: var(--beige); }
+.auth-form { color: var(--blue); border-color: rgba(0,48,87,.25); border-radius: 2px; box-shadow: 12px 12px 0 rgba(48,205,215,.28); }
+.auth-form > label, .modal-form label, .subject-field { color: var(--blue); }
+.brand-lockup--light, .brand-lockup--light small { color: var(--beige); }
+.microcopy { color: rgba(0,48,87,.82); background: rgba(180,235,245,.40); }
+
+.sidebar { color: var(--beige); border-right: 1px solid var(--cyan); background: var(--blue); }
+.sidebar::after { border-color: rgba(250,245,237,.18); box-shadow: 0 0 0 32px rgba(48,205,215,.08), 0 0 0 64px rgba(250,245,237,.035); }
+.sidebar-close { color: var(--beige); }
+.nav-link { color: rgba(250,245,237,.76); }
+.nav-link:hover { color: var(--beige); background: rgba(48,205,215,.13); }
+.nav-link--active { color: var(--blue); background: var(--beige); }
+.sidebar-account { border-color: rgba(250,245,237,.22); background: rgba(48,205,215,.08); }
+.sidebar-account span { color: rgba(250,245,237,.64); }
+.sidebar-account button { color: rgba(250,245,237,.84); }
+
+.data-panel, .preference-workspace, .recommendation-workspace, .issues-workspace,
+.sheet-overview, .analytics-panel, .quick-actions, .recent-imports, .metric-strip,
+.attention-panel, .email-studio, .graph-connect-card, .graph-status-panel {
+  color: var(--blue);
+  border-color: rgba(0,48,87,.20);
+  border-left: 10px solid var(--cyan);
+  border-radius: 2px;
+  background: var(--beige);
+  box-shadow: 10px 10px 0 rgba(48,205,215,.16);
+}
+.data-panel h1, .data-panel h2, .data-panel h3,
+.preference-workspace h2, .recommendation-workspace h2, .issues-workspace h2,
+.sheet-overview h2, .analytics-panel h2, .quick-actions h2, .recent-imports h2,
+.attention-panel h2, .email-studio h2, .graph-connect-card h2, .graph-status-panel h2 { color: var(--blue); }
+.data-panel a, .attention-panel a, .quick-actions a, .recent-imports a,
+.email-studio a, .graph-connect-card a, .graph-status-panel a { color: var(--blue); }
+.data-panel .eyebrow, .section-title-row .eyebrow, .data-panel-heading .eyebrow { color: var(--blue); }
+
+.primary-task-panel { color: var(--beige); border: 1px solid rgba(250,245,237,.28); border-left: 12px solid var(--cyan); border-radius: 2px; background: var(--blue); box-shadow: 10px 10px 0 rgba(48,205,215,.18); }
+.primary-task-panel > p, .safe-note { color: rgba(250,245,237,.82); }
+.primary-task-panel .button { color: var(--blue); background: var(--beige); }
+.panel-step, .panel-heading svg { color: var(--cyan); }
+.safe-note { border-top-color: rgba(250,245,237,.24); }
+.safe-note strong { color: var(--beige); }
+
+input, textarea, select, .rich-editor, .email-preview, .modal, .route-result, .preference-group {
+  color: var(--blue);
+  border-color: rgba(0,48,87,.28);
+  background: var(--beige);
+}
+input:hover, textarea:hover, select:hover { border-color: var(--plum); }
+input:focus, textarea:focus, select:focus { border-color: var(--cyan); outline-color: rgba(48,205,215,.28); }
+code, .editor-toolbar, .preview-panel, .preference-group header, .capacity-editor, .inbox-toolbar, .round-switcher { background: rgba(180,235,245,.42); }
+.editor-toolbar button:hover, .editor-toolbar button.is-active { color: var(--blue); background: var(--beige); }
+.filter-pills button { color: var(--blue); border-color: rgba(0,48,87,.28); background: rgba(250,245,237,.78); }
+.filter-pills button.is-active, .round-switcher button.is-active { color: var(--beige); border-color: var(--blue); background: var(--blue); }
+.round-switcher button.is-active small { color: rgba(250,245,237,.82); }
+
+.metric-icon--blue, .metric-icon--plum, .metric-icon--cyan, .action-icon, .avatar,
+.empty-state > svg, .empty-guide > svg { color: var(--blue); background: var(--blue-soft); }
+.metric-icon--gold { color: var(--blue); background: var(--gold); }
+.metric-strip strong, .department-label, .action-rows a { color: var(--blue); }
+.action-number { color: var(--plum); }
+.action-rows a:hover strong, .action-rows a > svg { color: var(--plum); }
+.issue-copy span { color: var(--blue); }
+.issue-icon--error { color: var(--red); background: #F0B4A0; }
+.issue-icon--warning { color: var(--blue); background: var(--gold); }
+
+.inline-alert { color: var(--blue); border-color: var(--plum); background: var(--blue-soft); }
+.inline-alert--success, .status-badge--reported_paid, .status-badge--replied, .status-badge--sent {
+  color: var(--blue); border-color: var(--plum); background: var(--blue-soft);
+}
+.inline-alert--error, .status-badge--unpaid, .status-badge--failed {
+  color: var(--blue); border-color: var(--red); background: #F0B4A0;
+}
+.inline-alert--warning, .status-badge--pending, .status-badge--awaiting_reply {
+  color: var(--blue); border-color: var(--orange); background: rgba(255,203,0,.34);
+}
+.status-badge--needs_review, .status-badge--not_contacted,
+.status-badge--draft, .status-badge--opened_in_gmail { color: var(--blue); background: var(--blue-soft); }
+.success-state > svg { color: var(--blue); background: var(--blue-soft); }
+
+.truth-banner { color: var(--blue); border-color: var(--orange); border-radius: 2px; background: var(--beige); }
+.truth-banner > span { color: var(--blue); background: rgba(255,203,0,.38); }
+.file-drop { color: var(--blue); border-color: var(--cyan); border-radius: 2px; background: var(--beige); }
+.file-drop p, .file-drop small { color: var(--blue); }
+.preference-group header > span, .route-arrow, .peak-callout { color: var(--beige); background: var(--blue); }
+.peak-callout span, .peak-callout small { color: rgba(250,245,237,.82); }
+.route-tester { color: var(--beige); border-left: 10px solid var(--cyan); border-radius: 2px; background: var(--blue); }
+.route-tester h2, .route-tester > label { color: var(--beige); }
+.planned-note { border-top-color: rgba(250,245,237,.24); }
+.planned-note p { color: rgba(250,245,237,.80); }
+
+.graph-connect-card { background: var(--beige); }
+.graph-connect-icon { color: var(--blue); border-radius: 2px; background: var(--cyan); box-shadow: none; }
+.graph-status-panel { background: var(--blue-soft); }
+.graph-identity > span, .watcher-state { color: var(--blue); background: rgba(48,205,215,.34); }
+.sync-facts div { border-color: rgba(0,48,87,.20); }
+.inbox-message--unread { background: rgba(180,235,245,.32); }
+.unread-dot { background: rgba(0,48,87,.34); }
+.inbox-message--unread .unread-dot { background: var(--blue); box-shadow: 0 0 0 3px rgba(48,205,215,.28); }
+.route-tag { color: var(--blue); background: var(--blue-soft); }
+.route-tag--neutral { color: var(--blue); background: rgba(0,48,87,.10); }
+
+.mobile-brand { color: var(--beige); border-bottom-color: var(--cyan); background: var(--blue); }
+.mobile-brand small { color: rgba(250,245,237,.76); }
+.mobile-menu-button { color: var(--blue); border-color: var(--cyan); background: var(--beige); }
+.nav-scrim { background: rgba(0,48,87,.72); }
+.boot-screen, .configuration-error { color: var(--beige); background: var(--blue); }
+.boot-screen h1, .configuration-error h1 { color: var(--beige); }
+.boot-screen p, .configuration-error p { color: rgba(250,245,237,.80); }

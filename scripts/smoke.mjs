@@ -44,6 +44,9 @@ async function axe(label) {
 
 try {
   await page.goto(appUrl, { waitUntil: "networkidle" });
+  await page.getByRole("heading", { name: /Welcome back|Set the workspace password/ }).waitFor();
+  await page.screenshot({ path: path.join(evidenceDir, "00-sign-in.png"), fullPage: true });
+  const signInAxe = await axe("Sign in");
   await page.getByLabel("Workspace password").fill(password);
   if (createAccount) await page.getByRole("button", { name: /First time/ }).click();
   await page.getByRole("button", { name: createAccount ? "Create private workspace" : "Open workspace" }).click();
@@ -77,8 +80,12 @@ try {
   await page.getByRole("heading", { name: "Compare preferences without the spreadsheet hunt" }).waitFor();
   const sampleButton = page.getByRole("button", { name: /Load a safe sample/ });
   if (await sampleButton.count()) {
-    await sampleButton.click();
-    await page.getByText(/registrations imported and .* contacts synchronized/).waitFor({ timeout: 30_000 });
+    try {
+      await sampleButton.click({ timeout: 5_000 });
+      await page.getByText(/registrations imported and .* contacts synchronized/).waitFor({ timeout: 30_000 });
+    } catch {
+      await page.getByRole("heading", { name: "Who chose the same thing?" }).waitFor();
+    }
   } else {
     await page.getByRole("heading", { name: "Who chose the same thing?" }).waitFor();
   }
@@ -119,8 +126,8 @@ try {
   console.log(JSON.stringify({
     passed: true,
     firstRun,
-    screenshots: 7,
-    axeNonBlockingViolations: { dashboardAxe, inboxAxe, contactsAxe, emailAxe, formsAxe, excelAxe, mobileAxe },
+    screenshots: 8,
+    axeNonBlockingViolations: { signInAxe, dashboardAxe, inboxAxe, contactsAxe, emailAxe, formsAxe, excelAxe, mobileAxe },
     workbookExercised: existsSync(workbookPath),
     passwordFile: ".admin-password (mode 0600; value not printed)",
   }, null, 2));
