@@ -1,10 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   canClaimProviderDelivery,
+  canFinalizeProviderDelivery,
   canManuallyChangeStatus,
   classifyProviderHttpFailure,
+  isProviderDeliveryLeaseExpired,
+  legacyProviderCampaignMaterial,
   providerCampaignMaterial,
   providerConnectionRedirect,
+  providerRecipientDeliveryMaterial,
   providerRetryAction,
   readResponseTextSafely,
   shouldRequireReauthorization,
@@ -20,6 +24,19 @@ describe("provider delivery claim policy", () => {
     expect(canClaimProviderDelivery("accepted")).toBe(false);
     expect(canClaimProviderDelivery("unknown")).toBe(false);
     expect(canClaimProviderDelivery("sent")).toBe(false);
+  });
+
+  it("expires abandoned sends and accepts only matching late finalization", () => {
+    const now = 1_000_000;
+    expect(isProviderDeliveryLeaseExpired("sending", now - 600_000, now)).toBe(true);
+    expect(isProviderDeliveryLeaseExpired("sending", now - 599_999, now)).toBe(false);
+    expect(isProviderDeliveryLeaseExpired("sending", undefined, now, now - 600_000)).toBe(true);
+    expect(isProviderDeliveryLeaseExpired("sending", undefined, now, now - 599_999)).toBe(false);
+    expect(isProviderDeliveryLeaseExpired("unknown", now - 600_000, now)).toBe(false);
+    expect(canFinalizeProviderDelivery("sending", "attempt-1", "attempt-1")).toBe(true);
+    expect(canFinalizeProviderDelivery("unknown", "attempt-1", "attempt-1")).toBe(true);
+    expect(canFinalizeProviderDelivery("unknown", "attempt-2", "attempt-1")).toBe(false);
+    expect(canFinalizeProviderDelivery("accepted", "attempt-1", "attempt-1")).toBe(false);
   });
 });
 
@@ -61,12 +78,29 @@ describe("provider response safety", () => {
 
 describe("campaign identity and reporting", () => {
   it("derives stable server campaign material from provider and reviewed content", () => {
-    const first = providerCampaignMaterial("google_gmail", "Subject", "<p>Body</p>");
-    const reopened = providerCampaignMaterial("google_gmail", "Subject", "<p>Body</p>");
-    expect(providerCampaignMaterial("google_gmail", "  Subject  ", "<p>Body</p>")).not.toBe(first);
+    const first = providerCampaignMaterial("google_gmail", "sender-a@example.com", "Subject", "<p>Body</p>");
+    const reopened = providerCampaignMaterial("google_gmail", "sender-a@example.com", "Subject", "<p>Body</p>");
+    expect(JSON.parse(first)).toEqual(["oakridge-provider-campaign-v2", "google_gmail", "sender-a@example.com", "Subject", "<p>Body</p>"]);
+    expect(providerCampaignMaterial("google_gmail", "sender-a@example.com", "  Subject  ", "<p>Body</p>")).not.toBe(first);
     expect(reopened).toBe(first);
-    expect(providerCampaignMaterial("microsoft_graph", "Subject", "<p>Body</p>")).not.toBe(first);
-    expect(providerCampaignMaterial("google_gmail", "Changed", "<p>Body</p>")).not.toBe(first);
+    expect(providerCampaignMaterial("microsoft_graph", "sender-a@example.com", "Subject", "<p>Body</p>")).not.toBe(first);
+    expect(providerCampaignMaterial("google_gmail", "sender-b@example.com", "Subject", "<p>Body</p>")).not.toBe(first);
+    expect(providerCampaignMaterial("google_gmail", "sender-a@example.com", "Changed", "<p>Body</p>")).not.toBe(first);
+  });
+
+  it("preserves the exact deployed v1 campaign identity for migration lookup", () => {
+    expect(legacyProviderCampaignMaterial("google_gmail", "Subject", "<p>Body</p>")).toBe(
+      JSON.stringify(["oakridge-provider-campaign-v1", "google_gmail", "Subject", "<p>Body</p>"]),
+    );
+  });
+
+  it("keys each delivery by its effective personalized recipient and content", () => {
+    const campaign = providerCampaignMaterial("google_gmail", "sender@example.com", "Hello {{firstName}}", "<p>{{allocation}}</p>");
+    const first = providerRecipientDeliveryMaterial(campaign, "delegate@example.com", "Delegate One", "Hello Delegate", "<p>UNHRC</p>");
+    expect(providerRecipientDeliveryMaterial(campaign, "delegate@example.com", "Delegate One", "Hello Delegate", "<p>UNHRC</p>")).toBe(first);
+    expect(providerRecipientDeliveryMaterial(campaign, "corrected@example.com", "Delegate One", "Hello Delegate", "<p>UNHRC</p>")).not.toBe(first);
+    expect(providerRecipientDeliveryMaterial(campaign, "delegate@example.com", "Delegate Corrected", "Hello Delegate", "<p>UNHRC</p>")).not.toBe(first);
+    expect(providerRecipientDeliveryMaterial(campaign, "delegate@example.com", "Delegate One", "Hello Delegate", "<p>WHO</p>")).not.toBe(first);
   });
 
   it("distinguishes accepted, unknown, in-progress, and retryable failures", () => {

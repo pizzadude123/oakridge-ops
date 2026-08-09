@@ -11,6 +11,8 @@ export type ProviderResultCounts = {
   alreadyAccepted: number;
 };
 
+export const PROVIDER_DELIVERY_LEASE_MS = 10 * 60 * 1_000;
+
 export class ProviderTokenError extends Error {
   constructor(
     readonly status: number,
@@ -24,6 +26,27 @@ export class ProviderTokenError extends Error {
 
 export function canClaimProviderDelivery(status?: ProviderDeliveryStatus) {
   return status === undefined || status === "failed";
+}
+
+export function isProviderDeliveryLeaseExpired(
+  status: ProviderDeliveryStatus,
+  lastAttemptAt: number | undefined,
+  now = Date.now(),
+  legacyUpdatedAt?: number,
+) {
+  const attemptStartedAt = lastAttemptAt ?? legacyUpdatedAt;
+  return status === "sending"
+    && attemptStartedAt !== undefined
+    && now - attemptStartedAt >= PROVIDER_DELIVERY_LEASE_MS;
+}
+
+export function canFinalizeProviderDelivery(
+  status: ProviderDeliveryStatus,
+  currentAttemptToken: string | undefined,
+  submittedAttemptToken: string,
+) {
+  return currentAttemptToken === submittedAttemptToken
+    && (status === "sending" || status === "unknown");
 }
 
 export function canManuallyChangeStatus(provider: MessageProvider, status: ManualMessageStatus) {
@@ -49,8 +72,29 @@ export function shouldRequireReauthorization(status: number, providerError?: str
     && providerError === "invalid_grant";
 }
 
-export function providerCampaignMaterial(provider: SendingProvider, subject: string, bodyHtml: string) {
+export function providerCampaignMaterial(provider: SendingProvider, senderEmail: string, subject: string, bodyHtml: string) {
+  return JSON.stringify(["oakridge-provider-campaign-v2", provider, senderEmail.toLowerCase(), subject, bodyHtml]);
+}
+
+export function legacyProviderCampaignMaterial(provider: SendingProvider, subject: string, bodyHtml: string) {
   return JSON.stringify(["oakridge-provider-campaign-v1", provider, subject, bodyHtml]);
+}
+
+export function providerRecipientDeliveryMaterial(
+  campaignMaterial: string,
+  recipientEmail: string,
+  recipientName: string,
+  subject: string,
+  bodyHtml: string,
+) {
+  return JSON.stringify([
+    "oakridge-provider-delivery-v1",
+    campaignMaterial,
+    recipientEmail.trim().toLowerCase(),
+    recipientName,
+    subject,
+    bodyHtml,
+  ]);
 }
 
 export function summarizeProviderDelivery(counts: ProviderResultCounts, providerLabel: string) {

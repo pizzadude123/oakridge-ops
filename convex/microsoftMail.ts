@@ -7,15 +7,18 @@ import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { action } from "./_generated/server";
 import { buildGraphSendMailPayload, buildOakridgeEmailHtml, personalizeTemplate } from "../src/domain/email";
-import { decryptGraphSecret, encryptGraphSecret, sha256Base64Url } from "./lib/graphCrypto";
+import { decryptGraphSecret, encryptGraphSecret, randomBase64Url, sha256Base64Url } from "./lib/graphCrypto";
 import {
   classifyProviderHttpFailure,
+  legacyProviderCampaignMaterial,
   providerCampaignMaterial,
+  providerRecipientDeliveryMaterial,
   ProviderTokenError,
   readResponseTextSafely,
   shouldRequireReauthorization,
 } from "./lib/mailDelivery";
 import { sanitizeEditorHtml } from "./lib/mailContent";
+import { prepareEmailAssets } from "./lib/prepareEmailAssets";
 
 const GRAPH_SCOPES = "openid profile offline_access User.Read Mail.Read Mail.Send Files.Read";
 const MAX_RECIPIENTS_PER_REQUEST = 50;
@@ -122,6 +125,7 @@ export const sendPersonalizedBatch = action({
     contactIds: v.array(v.id("contacts")),
     subjectTemplate: v.string(),
     bodyHtmlTemplate: v.string(),
+    imageAssets: v.optional(v.array(v.object({ assetId: v.id("emailAssets"), alt: v.string() }))),
     confirmation: v.string(),
   },
   handler: async (ctx, args): Promise<{
@@ -154,9 +158,14 @@ export const sendPersonalizedBatch = action({
       throw new Error("Connect Microsoft Outlook before sending email.");
     }
     if (contacts.length !== uniqueIds.length) throw new Error("One or more selected recipients are unavailable. No emails were sent.");
+    const emailAssets = await prepareEmailAssets(ctx, ownerId, args.imageAssets ?? []);
     const senderEmail = connection.email || "Connected Outlook account";
-    const batchId = await sha256Base64Url(providerCampaignMaterial("microsoft_graph", subjectTemplate, cleanTemplate));
-    const prepared = contacts.map((contact) => {
+    const campaignBody = emailAssets.inlineImages.length
+      ? `${cleanTemplate}\n<!-- oakridge-email-assets:${emailAssets.campaignMaterial} -->`
+      : cleanTemplate;
+    const campaignMaterial = providerCampaignMaterial("microsoft_graph", senderEmail, subjectTemplate, campaignBody);
+    const legacyBatchId = await sha256Base64Url(legacyProviderCampaignMaterial("microsoft_graph", subjectTemplate, cleanTemplate));
+    const prepared = await Promise.all(contacts.map(async (contact) => {
       const fields = contactFields(contact);
       const subject = personalizeTemplate(subjectTemplate, fields);
       const body = personalizeTemplate(cleanTemplate, fields, "html");
@@ -164,16 +173,24 @@ export const sendPersonalizedBatch = action({
       if (unresolved.length) {
         throw new Error(`${contact.fullName} is missing ${unresolved.map((field) => `{{${field}}}`).join(", ")}. No emails were sent.`);
       }
-      const html = buildOakridgeEmailHtml({ bodyHtml: body.output, preheader: subject.output });
+      const html = buildOakridgeEmailHtml({ bodyHtml: body.output, preheader: subject.output, images: emailAssets.layoutImages });
       const bodyText = sanitizeHtml(body.output, { allowedTags: [] }).replace(/\s+/g, " ").trim();
+      const batchId = await sha256Base64Url(providerRecipientDeliveryMaterial(
+        campaignMaterial,
+        contact.email,
+        contact.fullName,
+        subject.output,
+        html,
+      ));
       const payload = buildGraphSendMailPayload({
         recipientEmail: contact.email,
         recipientName: contact.fullName,
         subject: subject.output,
         html,
+        inlineImages: emailAssets.inlineImages,
       });
-      return { contact, subject: subject.output, html, bodyText, payload };
-    });
+      return { contact, subject: subject.output, html, bodyText, payload, batchId };
+    }));
 
     const refreshToken = await decryptGraphSecret(connection.encryptedRefreshToken, connection.refreshTokenIv);
     let tokens: Awaited<ReturnType<typeof refreshAccessToken>>;
@@ -203,10 +220,12 @@ export const sendPersonalizedBatch = action({
     let alreadyAccepted = 0;
     const failures: string[] = [];
     for (const item of prepared) {
+      const attemptToken = randomBase64Url(24);
       const claim = await ctx.runMutation(internal.messages.claimProviderDelivery, {
         ownerId,
         contactId: item.contact._id,
-        batchId,
+        batchId: item.batchId,
+        legacyBatchIds: [legacyBatchId],
         recipientEmail: item.contact.email,
         recipientName: item.contact.fullName,
         senderEmail,
@@ -214,6 +233,7 @@ export const sendPersonalizedBatch = action({
         subject: item.subject,
         bodyHtml: item.html,
         bodyText: item.bodyText,
+        attemptToken,
       });
       if (!claim.claimed) {
         if (claim.status === "unknown") unknown += 1;
@@ -246,10 +266,11 @@ export const sendPersonalizedBatch = action({
       await ctx.runMutation(internal.messages.finalizeProviderDelivery, {
         ownerId,
         contactId: item.contact._id,
-        batchId,
+        batchId: item.batchId,
         provider: "microsoft_graph",
         status,
         providerError,
+        attemptToken,
       });
     }
     return { accepted, failed, unknown, inProgress, alreadyAccepted, senderEmail, failures };

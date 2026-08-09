@@ -5,6 +5,7 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import clsx from "clsx";
 import { oakridgeLogoUrl, oakridgeWhiteLogoUrl } from "../lib/assets";
+import { RouteBoundary } from "./RouteBoundary";
 
 const PRIMARY_SENDER = "cattartzz@gmail.com";
 
@@ -65,7 +66,7 @@ export function AppShell() {
           <span><strong>Oakridge MUN</strong><small>Operations</small></span>
         </header>
         <main ref={main} id="main-content" tabIndex={-1}>
-          <Outlet />
+          <RouteBoundary><Outlet /></RouteBoundary>
         </main>
       </div>
     </div>

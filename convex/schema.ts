@@ -59,6 +59,7 @@ export default defineSchema({
     batchId: v.optional(v.string()),
     providerMessageId: v.optional(v.string()),
     providerError: v.optional(v.string()),
+    attemptToken: v.optional(v.string()),
     status: v.union(
       v.literal("draft"),
       v.literal("opened_in_gmail"),
@@ -77,6 +78,7 @@ export default defineSchema({
   })
     .index("by_owner", ["ownerId"])
     .index("by_owner_status", ["ownerId", "status"])
+    .index("by_status_last_attempt", ["status", "lastAttemptAt"])
     .index("by_owner_batch_contact", ["ownerId", "batchId", "contactId"])
     .index("by_owner_provider_batch_contact", ["ownerId", "provider", "batchId", "contactId"]),
   imports: defineTable({
@@ -162,6 +164,17 @@ export default defineSchema({
   })
     .index("by_owner", ["ownerId"])
     .index("by_owner_created", ["ownerId", "createdAt"]),
+  emailAssets: defineTable({
+    ownerId: v.id("users"),
+    storageId: v.id("_storage"),
+    fileName: v.string(),
+    contentType: v.union(v.literal("image/png"), v.literal("image/jpeg"), v.literal("image/gif")),
+    size: v.number(),
+    sha256: v.string(),
+    createdAt: v.number(),
+  })
+    .index("by_owner", ["ownerId"])
+    .index("by_storage", ["storageId"]),
   settings: defineTable({
     ownerId: v.id("users"),
     gmailSender: v.string(),

@@ -1,45 +1,52 @@
-import { lazy, Suspense, useEffect, useRef } from "react";
+import { lazy, useEffect, useRef, useState } from "react";
 import { Authenticated, AuthLoading, Unauthenticated, useMutation, useQuery } from "convex/react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { api } from "../convex/_generated/api";
 import { AppShell } from "./components/AppShell";
 import { SignIn } from "./components/SignIn";
 import { oakridgeLogoUrl } from "./lib/assets";
+import { importLazyRoute } from "./lib/lazyRoute";
+import { workspaceGateState } from "./domain/workspaceGate";
 
-const ContactsPage = lazy(() => import("./pages/ContactsPage").then((module) => ({ default: module.ContactsPage })));
-const DashboardPage = lazy(() => import("./pages/DashboardPage").then((module) => ({ default: module.DashboardPage })));
-const EmailPage = lazy(() => import("./pages/EmailPage").then((module) => ({ default: module.EmailPage })));
-const ExcelPage = lazy(() => import("./pages/ExcelPage").then((module) => ({ default: module.ExcelPage })));
-const FormsPage = lazy(() => import("./pages/FormsPage").then((module) => ({ default: module.FormsPage })));
-const InboxPage = lazy(() => import("./pages/InboxPage").then((module) => ({ default: module.InboxPage })));
+const ContactsPage = lazy(() => importLazyRoute("contacts", () => import("./pages/ContactsPage").then((module) => ({ default: module.ContactsPage }))));
+const DashboardPage = lazy(() => importLazyRoute("dashboard", () => import("./pages/DashboardPage").then((module) => ({ default: module.DashboardPage }))));
+const EmailPage = lazy(() => importLazyRoute("email", () => import("./pages/EmailPage").then((module) => ({ default: module.EmailPage }))));
+const ExcelPage = lazy(() => importLazyRoute("excel", () => import("./pages/ExcelPage").then((module) => ({ default: module.ExcelPage }))));
+const FormsPage = lazy(() => importLazyRoute("forms", () => import("./pages/FormsPage").then((module) => ({ default: module.FormsPage }))));
+const InboxPage = lazy(() => importLazyRoute("inbox", () => import("./pages/InboxPage").then((module) => ({ default: module.InboxPage }))));
 
 function Workspace() {
   const status = useQuery(api.workspace.status);
   const bootstrap = useMutation(api.workspace.bootstrap);
   const started = useRef(false);
+  const [bootstrapError, setBootstrapError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
+  const gate = workspaceGateState(status, bootstrapError);
 
   useEffect(() => {
     if (status?.initialized === false && !started.current) {
       started.current = true;
-      void bootstrap().catch(() => {
+      setBootstrapError(null);
+      void bootstrap().catch((error: unknown) => {
         started.current = false;
+        setBootstrapError(error instanceof Error ? error.message : "Oakridge could not finish workspace setup.");
       });
     }
-  }, [bootstrap, status?.initialized]);
+  }, [attempt, bootstrap, status?.initialized]);
 
-  if (!status?.initialized) {
+  if (gate.mode !== "ready") {
     return (
-      <main className="boot-screen" aria-live="polite">
+      <main className="boot-screen boot-screen--workspace" aria-live="polite" role={gate.mode === "error" ? "alert" : "status"}>
         <img src={oakridgeLogoUrl} alt="" />
-        <div className="spinner" aria-hidden="true" />
-        <h1>Preparing your Oakridge workspace</h1>
-        <p>Adding the two test contacts and safe routing rules.</p>
+        {gate.mode === "error" ? <div className="boot-error-mark" aria-hidden="true">!</div> : <div className="spinner" aria-hidden="true" />}
+        <h1>{gate.title}</h1>
+        <p>{gate.detail}</p>
+        {gate.mode === "error" && <button className="button button--primary" type="button" onClick={() => { started.current = false; setBootstrapError(null); setAttempt((value) => value + 1); }}>Retry workspace setup</button>}
       </main>
     );
   }
 
   return (
-    <Suspense fallback={<div className="page-loader"><span className="spinner" /> Loading workspace…</div>}>
     <Routes>
       <Route element={<AppShell />}>
         <Route index element={<DashboardPage />} />
@@ -51,7 +58,6 @@ function Workspace() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>
-    </Suspense>
   );
 }
 

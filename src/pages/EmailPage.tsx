@@ -1,11 +1,12 @@
 import DOMPurify from "dompurify";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useConvexAuth } from "@convex-dev/auth/react";
 import { useAction, useMutation, useQuery } from "convex/react";
-import { AtSign, Building2, Check, ChevronRight, ExternalLink, FileUp, Filter, MailCheck, Route, Save, Send, ShieldCheck, Sparkles, Users } from "lucide-react";
+import { AtSign, Building2, Check, ChevronRight, ExternalLink, FileImage, FileUp, Filter, ImagePlus, MailCheck, Route, Save, Send, ShieldCheck, Sparkles, Trash2, Users } from "lucide-react";
 import clsx from "clsx";
 import { useLocation } from "react-router-dom";
 import { api } from "../../convex/_generated/api";
-import type { Doc } from "../../convex/_generated/dataModel";
+import type { Doc, Id } from "../../convex/_generated/dataModel";
 import {
   providerRetryAction,
   summarizeProviderDelivery,
@@ -13,6 +14,7 @@ import {
   type ProviderResultCounts,
 } from "../../convex/lib/mailDelivery";
 import { buildGmailComposeUrl, buildOakridgeEmailHtml, matchRoutingRule, personalizeTemplate, unresolvedFieldsForRecipients } from "../domain/email";
+import { emailAssetUploadEndpoint, formatImageSize, validateSelectedEmailImages } from "../domain/emailAssets";
 import { PageHeader } from "../components/PageHeader";
 import { RichEditor } from "../components/RichEditor";
 import { StatusBadge } from "../components/StatusBadge";
@@ -20,7 +22,8 @@ import { htmlToPlainText, initials } from "../lib/text";
 import { parsePeopleFile } from "../lib/workbook";
 
 const SENDER = "cattartzz@gmail.com";
-const DEFAULT_BODY = `<h2>An update from Oakridge MUN</h2><p>Hello {{firstName}},</p><p>Thank you for being part of the Oakridge Model United Nations community.</p><p>We’re writing to share an important update with you. Please review the details below, and reply to this email if there is anything we can help with.</p><p><strong>Your update</strong><br>Write the announcement, next step, or important detail here.</p><p>Warm regards,<br><strong>Oakridge MUN Team</strong></p>`;
+const CONVEX_URL = import.meta.env.VITE_CONVEX_URL as string;
+const DEFAULT_BODY = `<p>Hello {{firstName}},</p><p>We are writing with an Oakridge MUN update.</p><h3>What you need to know</h3><p>Add the essential details, including any date, decision, or action required.</p><p>Regards,<br><strong>Oakridge MUN Team</strong></p>`;
 const mergeFields = [
   ["First name", "{{firstName}}"],
   ["Full name", "{{fullName}}"],
@@ -33,6 +36,14 @@ const mergeFields = [
 
 type Tab = "write" | "routing" | "history";
 type MailProvider = "google" | "microsoft";
+type UploadedEmailImage = {
+  id: Id<"emailAssets">;
+  url: string;
+  fileName: string;
+  contentType: string;
+  size: number;
+  alt: string;
+};
 
 function emptyProviderResultCounts(): ProviderResultCounts {
   return { accepted: 0, failed: 0, unknown: 0, inProgress: 0, alreadyAccepted: 0 };
@@ -60,6 +71,7 @@ function contactFields(contact: Doc<"contacts">) {
 }
 
 export function EmailPage() {
+  const { fetchAccessToken } = useConvexAuth();
   const contacts = useQuery(api.contacts.list);
   const rules = useQuery(api.routingRules.list);
   const messages = useQuery(api.messages.recent);
@@ -69,6 +81,7 @@ export function EmailPage() {
   const markStatus = useMutation(api.messages.markStatus);
   const saveRule = useMutation(api.routingRules.save);
   const importPeople = useMutation(api.contacts.importPeople);
+  const removeEmailImage = useMutation(api.emailAssets.remove);
   const beginGoogleConnection = useAction(api.googleGmail.beginConnection);
   const disconnectGoogle = useAction(api.googleGmail.disconnect);
   const sendGoogleBatch = useAction(api.googleGmail.sendPersonalizedBatch);
@@ -76,6 +89,7 @@ export function EmailPage() {
   const sendMicrosoftBatch = useAction(api.microsoftMail.sendPersonalizedBatch);
   const location = useLocation();
   const fileInput = useRef<HTMLInputElement>(null);
+  const imageInput = useRef<HTMLInputElement>(null);
   const sendDialog = useRef<HTMLDialogElement>(null);
   const [tab, setTab] = useState<Tab>("write");
   const [providerChoice, setProviderChoice] = useState<MailProvider | null>(null);
@@ -83,6 +97,8 @@ export function EmailPage() {
   const [peopleFilter, setPeopleFilter] = useState<"all" | "unpaid" | "outstanding">("all");
   const [subject, setSubject] = useState("An update from Oakridge MUN");
   const [bodyHtml, setBodyHtml] = useState(DEFAULT_BODY);
+  const [emailImages, setEmailImages] = useState<UploadedEmailImage[]>([]);
+  const [imageBusy, setImageBusy] = useState(false);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState(() => connectionNotice(location.search));
   const [sendConfirmed, setSendConfirmed] = useState(false);
@@ -90,12 +106,26 @@ export function EmailPage() {
   const [deliveryCounts, setDeliveryCounts] = useState<ProviderResultCounts>(emptyProviderResultCounts);
   const [sendInterrupted, setSendInterrupted] = useState(false);
   const [testSubject, setTestSubject] = useState("Allocation question from a delegate");
+  const emailImagesRef = useRef<UploadedEmailImage[]>([]);
+  const removeEmailImageRef = useRef(removeEmailImage);
+
+  useEffect(() => {
+    emailImagesRef.current = emailImages;
+    removeEmailImageRef.current = removeEmailImage;
+  }, [emailImages, removeEmailImage]);
+
+  useEffect(() => () => {
+    for (const image of emailImagesRef.current) {
+      void removeEmailImageRef.current({ id: image.id }).catch(() => undefined);
+    }
+  }, []);
 
   const visibleContacts = useMemo(() => (contacts ?? []).filter((contact) =>
     peopleFilter === "all"
       || (peopleFilter === "unpaid" && contact.paymentStatus === "unpaid")
       || (peopleFilter === "outstanding" && contact.replyStatus === "awaiting_reply"),
   ), [contacts, peopleFilter]);
+  const allVisibleSelected = visibleContacts.length > 0 && visibleContacts.every((contact) => selected.has(contact._id));
   const selectedContacts = (contacts ?? []).filter((contact) => selected.has(contact._id));
   const selectedRecipientIssues = unresolvedFieldsForRecipients(
     subject,
@@ -115,7 +145,11 @@ export function EmailPage() {
   const providerLabel = mailProvider === "google" ? "Google" : "Microsoft";
   const retryAction = providerRetryAction(deliveryCounts, sendInterrupted);
   const previewDocument = previewBody && previewSubject
-    ? buildOakridgeEmailHtml({ bodyHtml: DOMPurify.sanitize(previewBody.output), preheader: previewSubject.output })
+    ? buildOakridgeEmailHtml({
+        bodyHtml: DOMPurify.sanitize(previewBody.output),
+        preheader: previewSubject.output,
+        images: emailImages.map(({ url, alt }) => ({ src: url, alt })),
+      })
     : "";
   const routingRule = matchRoutingRule(testSubject, (rules ?? []).map((rule) => ({ ...rule, id: rule._id })));
 
@@ -124,6 +158,18 @@ export function EmailPage() {
     setSelected((current) => {
       const next = new Set(current);
       if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleVisibleContacts() {
+    setSelected((current) => {
+      const next = new Set(current);
+      if (visibleContacts.length > 0 && visibleContacts.every((contact) => next.has(contact._id))) {
+        visibleContacts.forEach((contact) => next.delete(contact._id));
+      } else {
+        visibleContacts.forEach((contact) => next.add(contact._id));
+      }
       return next;
     });
   }
@@ -146,6 +192,57 @@ export function EmailPage() {
       setBusy(false);
       if (fileInput.current) fileInput.current.value = "";
     }
+  }
+
+  async function uploadEmailImages(files: File[]) {
+    setNotice("");
+    let selectedFiles: File[];
+    try {
+      selectedFiles = validateSelectedEmailImages({ existingSizes: emailImages.map(({ size }) => size), files });
+    } catch (cause) {
+      setNotice(cause instanceof Error ? cause.message : "Those images could not be added.");
+      return;
+    }
+    setImageBusy(true);
+    try {
+      for (const file of selectedFiles) {
+        const authToken = await fetchAccessToken({ forceRefreshToken: false });
+        if (!authToken) throw new Error("Sign in before uploading email images.");
+        const response = await fetch(emailAssetUploadEndpoint(CONVEX_URL, file.name), {
+          method: "POST",
+          headers: { Authorization: `Bearer ${authToken}`, "Content-Type": file.type },
+          body: file,
+        });
+        const result = await response.json() as Partial<UploadedEmailImage> & { error?: string };
+        if (!response.ok || !result.id || !result.url || !result.fileName || !result.contentType || !result.size) {
+          throw new Error(result.error || `${file.name} could not be uploaded.`);
+        }
+        const alt = file.name.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " ").trim();
+        setEmailImages((current) => [...current, {
+          id: result.id as Id<"emailAssets">,
+          url: result.url!,
+          fileName: result.fileName!,
+          contentType: result.contentType!,
+          size: result.size!,
+          alt,
+        }]);
+      }
+    } catch (cause) {
+      setNotice(cause instanceof Error ? cause.message : "The email images could not be uploaded.");
+    } finally {
+      setImageBusy(false);
+      if (imageInput.current) imageInput.current.value = "";
+    }
+  }
+
+  async function deleteEmailImage(id: Id<"emailAssets">) {
+    setImageBusy(true); setNotice("");
+    try {
+      await removeEmailImage({ id });
+      setEmailImages((current) => current.filter((image) => image.id !== id));
+    } catch (cause) {
+      setNotice(cause instanceof Error ? cause.message : "The email image could not be removed.");
+    } finally { setImageBusy(false); }
   }
 
   async function connectProvider(provider: MailProvider) {
@@ -179,6 +276,10 @@ export function EmailPage() {
       setNotice(`Connect ${providerLabel} before sending. You can still prepare manual Gmail drafts now.`);
       return;
     }
+    if (emailImages.some(({ alt }) => !alt.trim())) {
+      setNotice("Add alternative text for every campaign image before sending.");
+      return;
+    }
     const issue = selectedRecipientIssues[0];
     if (issue) {
       const contact = selectedContacts[issue.recipientIndex];
@@ -201,6 +302,7 @@ export function EmailPage() {
           contactIds: chunk.map((contact) => contact._id),
           subjectTemplate: subject,
           bodyHtmlTemplate: bodyHtml,
+          imageAssets: emailImages.map(({ id, alt }) => ({ assetId: id, alt })),
           confirmation: `SEND ${chunk.length}`,
         };
         const result = mailProvider === "google" ? await sendGoogleBatch(args) : await sendMicrosoftBatch(args);
@@ -302,7 +404,7 @@ export function EmailPage() {
           <section className="recipient-rail" aria-label="Choose recipients">
             <div className="rail-heading"><div><p className="eyebrow">Step 1</p><h2>Choose people</h2></div><span>{selected.size} selected</span></div>
             <div className="compact-filter"><Filter aria-hidden="true" /><select value={peopleFilter} onChange={(event) => setPeopleFilter(event.target.value as typeof peopleFilter)} aria-label="Filter recipients"><option value="all">Everyone</option><option value="unpaid">Not paid</option><option value="outstanding">Awaiting reply</option></select></div>
-            <button className="select-all-button" type="button" onClick={() => setSelected((current) => current.size === visibleContacts.length ? new Set() : new Set(visibleContacts.map((contact) => contact._id)))}>{selected.size === visibleContacts.length && visibleContacts.length ? "Clear selection" : "Select this group"}</button>
+            <button className="select-all-button" type="button" onClick={toggleVisibleContacts}>{allVisibleSelected ? "Clear this group" : "Select this group"}</button>
             <input ref={fileInput} className="sr-only" type="file" accept=".xlsx,.xls,.csv" aria-label="Import people from Excel or CSV" onChange={(event) => { const file = event.target.files?.[0]; if (file) void importRecipientFile(file); }} />
             <button className="recipient-import-button" type="button" disabled={busy} onClick={() => fileInput.current?.click()}><FileUp aria-hidden="true" /><span><strong>{busy ? "Importing…" : "Import people"}</strong><small>Excel, CSV, or a Forms export</small></span></button>
             <div className="recipient-list">
@@ -322,7 +424,26 @@ export function EmailPage() {
             <label className="subject-field">Subject<input value={subject} onChange={(event) => setSubject(event.target.value)} placeholder="What is this email about?" /></label>
             <div className="merge-fields"><span>Personalize:</span>{mergeFields.map(([label, token]) => <button key={token} type="button" onClick={() => insertField(token)}>+ {label}</button>)}</div>
             <RichEditor value={bodyHtml} onChange={setBodyHtml} />
-            <div className="composer-footer"><div><strong>{selected.size || 0} personalized email{selected.size === 1 ? "" : "s"}</strong><small>Each person receives a separate message—never a visible bulk list.</small></div><div className="composer-actions"><button className="button button--secondary" type="button" disabled={!selected.size || busy || selectedRecipientIssues.length > 0} onClick={() => void prepareDrafts()}><Save aria-hidden="true" /> Prepare drafts</button><button className="button button--primary" type="button" disabled={!selected.size || busy || selectedRecipientIssues.length > 0} onClick={() => providerConnected ? reviewSend() : void connectProvider(mailProvider)}><Send aria-hidden="true" /> {providerConnected ? "Review & send" : `Connect ${providerLabel}`}</button></div></div>
+            <section className="email-media-panel" aria-labelledby="email-media-heading">
+              <div className="email-media-heading">
+                <div className="email-media-icon"><FileImage aria-hidden="true" /></div>
+                <div><h3 id="email-media-heading">Campaign images</h3><p>Add up to three PNG, JPEG, or GIF images. They are embedded inside every email, not linked as fragile external files.</p></div>
+                <button className="button button--secondary" type="button" disabled={imageBusy || emailImages.length >= 3} onClick={() => imageInput.current?.click()}><ImagePlus aria-hidden="true" /> {imageBusy ? "Uploading…" : "Add images"}</button>
+              </div>
+              <input ref={imageInput} className="sr-only" type="file" accept="image/png,image/jpeg,image/gif" multiple aria-label="Upload campaign images" onChange={(event) => { if (event.target.files?.length) void uploadEmailImages([...event.target.files]); }} />
+              {emailImages.length ? (
+                <div className="email-image-list">{emailImages.map((image, index) => (
+                  <article key={image.id} className="email-image-item">
+                    <img src={image.url} alt="" />
+                    <div className="email-image-copy"><strong>{image.fileName}</strong><small>{formatImageSize(image.size)} · Embedded image {index + 1}</small><label>Alternative text<input value={image.alt} maxLength={160} onChange={(event) => setEmailImages((current) => current.map((item) => item.id === image.id ? { ...item, alt: event.target.value } : item))} placeholder="Describe the image for recipients who cannot see it" /></label></div>
+                    <button className="icon-button icon-button--danger" type="button" disabled={imageBusy || busy || deliveryCounts.unknown > 0 || deliveryCounts.inProgress > 0} onClick={() => void deleteEmailImage(image.id)} aria-label={`Remove ${image.fileName}`}><Trash2 aria-hidden="true" /></button>
+                  </article>
+                ))}</div>
+              ) : (
+                <button className="email-image-drop" type="button" disabled={imageBusy} onClick={() => imageInput.current?.click()} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); if (event.dataTransfer.files.length) void uploadEmailImages([...event.dataTransfer.files]); }}><ImagePlus aria-hidden="true" /><span><strong>Drop campaign images here</strong><small>Or choose files · 1 MB each · 2 MB total</small></span></button>
+              )}
+            </section>
+            <div className="composer-footer"><div><strong>{selected.size || 0} personalized email{selected.size === 1 ? "" : "s"}</strong><small>{emailImages.length ? `${emailImages.length} embedded image${emailImages.length === 1 ? "" : "s"} · Send through a connected provider.` : "Each person receives a separate message—never a visible bulk list."}</small></div><div className="composer-actions"><button className="button button--secondary" type="button" title={emailImages.length ? "Uploaded images require provider delivery." : undefined} disabled={!selected.size || busy || emailImages.length > 0 || selectedRecipientIssues.length > 0} onClick={() => void prepareDrafts()}><Save aria-hidden="true" /> Prepare drafts</button><button className="button button--primary" type="button" disabled={!selected.size || busy || imageBusy || emailImages.some(({ alt }) => !alt.trim()) || selectedRecipientIssues.length > 0} onClick={() => providerConnected ? reviewSend() : void connectProvider(mailProvider)}><Send aria-hidden="true" /> {providerConnected ? "Review & send" : `Connect ${providerLabel}`}</button></div></div>
 
           </section>
 
@@ -365,19 +486,20 @@ export function EmailPage() {
         </section>
       )}
 
-      <dialog ref={sendDialog} className="modal email-send-dialog" onClose={() => { setSendConfirmed(false); setSendError(""); }}>
+      <dialog ref={sendDialog} className="modal email-send-dialog" aria-labelledby="send-dialog-title" aria-describedby="send-dialog-description" onClose={() => { setSendConfirmed(false); setSendError(""); }}>
         <form onSubmit={(event) => event.preventDefault()}>
           <div className="send-dialog-icon"><ShieldCheck aria-hidden="true" /></div>
           <p className="eyebrow">Final check · {providerLabel}</p>
-          <h2>Send {selectedContacts.length} separate personalized email{selectedContacts.length === 1 ? "" : "s"}?</h2>
-          <p>Each recipient gets their own Oakridge-branded message. No recipient can see anyone else in the batch.</p>
+          <h2 id="send-dialog-title">Send {selectedContacts.length} separate personalized email{selectedContacts.length === 1 ? "" : "s"}?</h2>
+          <p id="send-dialog-description">Each recipient gets their own Oakridge-branded message. No recipient can see anyone else in the batch.</p>
           <div className="send-review-summary">
             <div><small>Provider</small><strong>{providerLabel}</strong></div>
             <div><small>From</small><strong>{sender}</strong></div>
             <div><small>Recipients</small><strong>{selectedContacts.length}</strong></div>
+            <div><small>Images</small><strong>{emailImages.length}</strong></div>
           </div>
           <div className="send-recipient-sample">{selectedContacts.slice(0, 5).map((contact) => <span key={contact._id}>{contact.fullName} <small>{contact.email}</small></span>)}{selectedContacts.length > 5 && <span>+ {selectedContacts.length - 5} more</span>}</div>
-          <label className="send-confirmation"><input type="checkbox" checked={sendConfirmed} onChange={(event) => setSendConfirmed(event.target.checked)} /><span>I reviewed the provider, sender, subject, message, and recipient count.</span></label>
+          <label className="send-confirmation"><input type="checkbox" checked={sendConfirmed} onChange={(event) => setSendConfirmed(event.target.checked)} /><span>I reviewed the provider, sender, subject, message, images, and recipient count.</span></label>
           {sendError && <div className="inline-alert inline-alert--warning" role="alert">{sendError}</div>}
           <div className="modal-actions"><button type="button" className="button button--ghost" disabled={busy} onClick={() => sendDialog.current?.close()}>Cancel</button><button type="button" className="button button--primary" disabled={!sendConfirmed || busy || (Boolean(sendError) && retryAction.disabled)} onClick={() => void sendNow()}><Send aria-hidden="true" /> {busy ? "Sending…" : sendError ? retryAction.label : `Send with ${providerLabel}`}</button></div>
         </form>

@@ -17,4 +17,18 @@ crons.interval(
   {},
 );
 
+crons.interval(
+  "Reconcile interrupted provider email deliveries every five minutes",
+  { minutes: 5 },
+  internal.messages.expireStaleProviderDeliveries,
+  {},
+);
+
+crons.interval(
+  "Remove abandoned email images every hour",
+  { hours: 1 },
+  internal.emailAssets.pruneExpired,
+  {},
+);
+
 export default crons;

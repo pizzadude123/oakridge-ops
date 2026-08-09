@@ -14,14 +14,22 @@ describe("buildOakridgeEmailHtml", () => {
     const html = buildOakridgeEmailHtml({
       bodyHtml: "<p>Hello Pranay,</p><p>Your committee update is ready.</p>",
       preheader: "Your Oakridge MUN update",
+      images: [{ src: "cid:oakridge-image-1", alt: 'Committee delegates at "Oakridge"' }],
     });
 
     expect(html).toContain("<!doctype html>");
     expect(html).toContain("@media only screen and (max-width: 620px)");
-    expect(html).toContain("https://pizzadude123.github.io/oakridge-ops/oakridge-logo.png");
+    expect(html).toContain("https://pizzadude123.github.io/oakridge-ops/oakridge-logo-white.png");
     expect(html).toContain("Oakridge MUN");
     expect(html).toContain("Your committee update is ready.");
     expect(html).toContain("#003057");
+    expect(html).toContain('src="cid:oakridge-image-1"');
+    expect(html).toContain('alt="Committee delegates at &quot;Oakridge&quot;"');
+    expect(html).toContain("background:#FAF5ED");
+    expect(html).toContain("background:#003057");
+    expect(html).not.toContain("background:#ffffff");
+    expect(html).not.toContain("Clear communication. Thoughtful diplomacy. One community.");
+    expect(html).toContain('alt="" style="display:block;width:52px');
   });
 });
 
@@ -32,11 +40,25 @@ describe("buildGraphSendMailPayload", () => {
       recipientName: "Aarav Rao",
       subject: "Your DISEC allocation",
       html: "<html><body>Oakridge</body></html>",
+      inlineImages: [{
+        contentId: "oakridge-image-1",
+        contentType: "image/png",
+        fileName: "oakridge-image-1.png",
+        contentBase64: "cG5nLWJ5dGVz",
+      }],
     });
 
     expect(payload.message.subject).toBe("Your DISEC allocation");
     expect(payload.message.body).toEqual({ contentType: "HTML", content: "<html><body>Oakridge</body></html>" });
     expect(payload.message.toRecipients).toEqual([{ emailAddress: { address: "aarav@example.com", name: "Aarav Rao" } }]);
+    expect(payload.message.attachments).toEqual([{
+      "@odata.type": "#microsoft.graph.fileAttachment",
+      contentBytes: "cG5nLWJ5dGVz",
+      contentId: "oakridge-image-1",
+      contentType: "image/png",
+      isInline: true,
+      name: "oakridge-image-1.png",
+    }]);
     expect(payload.saveToSentItems).toBe(true);
   });
 });

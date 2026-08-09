@@ -11,12 +11,15 @@ import { decryptGraphSecret, encryptGraphSecret, randomBase64Url, sha256Base64Ur
 import { buildGmailRawMessage } from "./lib/gmailMessage";
 import {
   classifyProviderHttpFailure,
+  legacyProviderCampaignMaterial,
   providerCampaignMaterial,
+  providerRecipientDeliveryMaterial,
   ProviderTokenError,
   readResponseTextSafely,
   shouldRequireReauthorization,
 } from "./lib/mailDelivery";
 import { sanitizeEditorHtml } from "./lib/mailContent";
+import { prepareEmailAssets } from "./lib/prepareEmailAssets";
 
 const GOOGLE_SCOPES = ["openid", "email", "profile", "https://www.googleapis.com/auth/gmail.send"];
 const MAX_RECIPIENTS_PER_REQUEST = 50;
@@ -174,6 +177,7 @@ export const sendPersonalizedBatch = action({
     contactIds: v.array(v.id("contacts")),
     subjectTemplate: v.string(),
     bodyHtmlTemplate: v.string(),
+    imageAssets: v.optional(v.array(v.object({ assetId: v.id("emailAssets"), alt: v.string() }))),
     confirmation: v.string(),
   },
   handler: async (ctx, args): Promise<{
@@ -206,9 +210,14 @@ export const sendPersonalizedBatch = action({
       throw new Error("Connect a Google account before sending email.");
     }
     if (contacts.length !== uniqueIds.length) throw new Error("One or more selected recipients are unavailable. No emails were sent.");
+    const emailAssets = await prepareEmailAssets(ctx, ownerId, args.imageAssets ?? []);
     const senderEmail = connection.email || "Connected Google account";
-    const batchId = await sha256Base64Url(providerCampaignMaterial("google_gmail", subjectTemplate, cleanTemplate));
-    const prepared = contacts.map((contact) => {
+    const campaignBody = emailAssets.inlineImages.length
+      ? `${cleanTemplate}\n<!-- oakridge-email-assets:${emailAssets.campaignMaterial} -->`
+      : cleanTemplate;
+    const campaignMaterial = providerCampaignMaterial("google_gmail", senderEmail, subjectTemplate, campaignBody);
+    const legacyBatchId = await sha256Base64Url(legacyProviderCampaignMaterial("google_gmail", subjectTemplate, cleanTemplate));
+    const prepared = await Promise.all(contacts.map(async (contact) => {
       const fields = contactFields(contact);
       const personalizedSubject = personalizeTemplate(subjectTemplate, fields);
       const personalizedBody = personalizeTemplate(cleanTemplate, fields, "html");
@@ -216,8 +225,15 @@ export const sendPersonalizedBatch = action({
       if (unresolved.length) {
         throw new Error(`${contact.fullName} is missing ${unresolved.map((field) => `{{${field}}}`).join(", ")}. No emails were sent.`);
       }
-      const html = buildOakridgeEmailHtml({ bodyHtml: personalizedBody.output, preheader: personalizedSubject.output });
+      const html = buildOakridgeEmailHtml({ bodyHtml: personalizedBody.output, preheader: personalizedSubject.output, images: emailAssets.layoutImages });
       const bodyText = sanitizeHtml(personalizedBody.output, { allowedTags: [] }).replace(/\s+/g, " ").trim();
+      const batchId = await sha256Base64Url(providerRecipientDeliveryMaterial(
+        campaignMaterial,
+        contact.email,
+        contact.fullName,
+        personalizedSubject.output,
+        html,
+      ));
       const raw = buildGmailRawMessage({
         senderEmail,
         recipientEmail: contact.email,
@@ -225,9 +241,10 @@ export const sendPersonalizedBatch = action({
         subject: personalizedSubject.output,
         text: bodyText,
         html,
+        inlineImages: emailAssets.inlineImages,
       });
-      return { contact, subject: personalizedSubject.output, html, bodyText, raw };
-    });
+      return { contact, subject: personalizedSubject.output, html, bodyText, raw, batchId };
+    }));
 
     const refreshToken = await decryptGraphSecret(connection.encryptedRefreshToken, connection.refreshTokenIv);
     let tokens: Awaited<ReturnType<typeof refreshAccessToken>>;
@@ -257,10 +274,12 @@ export const sendPersonalizedBatch = action({
     let alreadyAccepted = 0;
     const failures: string[] = [];
     for (const item of prepared) {
+      const attemptToken = randomBase64Url(24);
       const claim = await ctx.runMutation(internal.messages.claimProviderDelivery, {
         ownerId,
         contactId: item.contact._id,
-        batchId,
+        batchId: item.batchId,
+        legacyBatchIds: [legacyBatchId],
         recipientEmail: item.contact.email,
         recipientName: item.contact.fullName,
         senderEmail,
@@ -268,6 +287,7 @@ export const sendPersonalizedBatch = action({
         subject: item.subject,
         bodyHtml: item.html,
         bodyText: item.bodyText,
+        attemptToken,
       });
       if (!claim.claimed) {
         if (claim.status === "unknown") unknown += 1;
@@ -304,11 +324,12 @@ export const sendPersonalizedBatch = action({
       await ctx.runMutation(internal.messages.finalizeProviderDelivery, {
         ownerId,
         contactId: item.contact._id,
-        batchId,
+        batchId: item.batchId,
         provider: "google_gmail",
         providerMessageId,
         status,
         providerError,
+        attemptToken,
       });
     }
     return { accepted, failed, unknown, inProgress, alreadyAccepted, senderEmail, failures };

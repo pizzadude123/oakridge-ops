@@ -30,6 +30,61 @@ describe("buildGmailRawMessage", () => {
     expect(message.replaceAll("\r\n", "")).toContain(Buffer.from("<h1>Hello Aarav</h1><p>Your allocation is <strong>ready</strong>.</p>").toString("base64"));
   });
 
+  it("embeds uploaded campaign images as related CID attachments", () => {
+    const imageBase64 = Buffer.from("safe image bytes").toString("base64");
+    const message = decodeRaw(buildGmailRawMessage({
+      senderEmail: "cattartzz@gmail.com",
+      recipientEmail: "delegate@example.com",
+      recipientName: "Delegate",
+      subject: "Oakridge event update",
+      text: "Event details",
+      html: '<img src="cid:oakridge-image-1" alt="Delegates">',
+      inlineImages: [{
+        contentId: "oakridge-image-1",
+        contentType: "image/png",
+        fileName: "oakridge-image-1.png",
+        contentBase64: imageBase64,
+      }],
+    }));
+
+    expect(message).toContain("Content-Type: multipart/related;");
+    expect(message).toContain("Content-Type: multipart/alternative;");
+    expect(message).toContain("Content-Type: image/png");
+    expect(message).toContain("Content-ID: <oakridge-image-1>");
+    expect(message).toContain('Content-Disposition: inline; filename="oakridge-image-1.png"');
+    expect(message.replaceAll("\r\n", "")).toContain(imageBase64);
+  });
+
+  it("rejects unsafe inline image MIME metadata", () => {
+    const base = {
+      senderEmail: "cattartzz@gmail.com",
+      recipientEmail: "delegate@example.com",
+      recipientName: "Delegate",
+      subject: "Oakridge event update",
+      text: "Event details",
+      html: "<p>Event details</p>",
+    };
+
+    expect(() => buildGmailRawMessage({
+      ...base,
+      inlineImages: [{
+        contentId: "safe\r\nBcc: attacker@example.com",
+        contentType: "image/png",
+        fileName: "image.png",
+        contentBase64: "cG5n",
+      }],
+    })).toThrow("valid inline image");
+    expect(() => buildGmailRawMessage({
+      ...base,
+      inlineImages: [{
+        contentId: "oakridge-image-1",
+        contentType: "image/svg+xml" as "image/png",
+        fileName: "image.svg",
+        contentBase64: "PHN2Zz4=",
+      }],
+    })).toThrow("valid inline image");
+  });
+
   it("encodes subjects and display names so imported names cannot add recipients", () => {
     const message = decodeRaw(buildGmailRawMessage({
       senderEmail: "nagapranayimmadi@gmail.com",

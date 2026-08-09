@@ -5,11 +5,12 @@ import StarterKit from "@tiptap/starter-kit";
 import { Bold, Italic, Link as LinkIcon, List, ListOrdered, Redo2, Undo2 } from "lucide-react";
 import { useEffect } from "react";
 import clsx from "clsx";
+import { syncRichEditorValue } from "../domain/richEditor";
 
 export function RichEditor({ value, onChange }: { value: string; onChange: (html: string) => void }) {
   const editor = useEditor({
     extensions: [
-      StarterKit,
+      StarterKit.configure({ link: false }),
       Link.configure({ openOnClick: false, autolink: true, HTMLAttributes: { rel: "noopener noreferrer" } }),
       Placeholder.configure({ placeholder: "Write the message here. Keep it warm, clear, and specific." }),
     ],
@@ -19,7 +20,7 @@ export function RichEditor({ value, onChange }: { value: string; onChange: (html
   });
 
   useEffect(() => {
-    if (editor && editor.getHTML() !== value) editor.commands.setContent(value, { emitUpdate: false });
+    syncRichEditorValue(editor, value);
   }, [editor, value]);
 
   if (!editor) return <div className="editor-loading">Loading editor…</div>;

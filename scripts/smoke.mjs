@@ -9,6 +9,8 @@ const appUrl = process.env.APP_URL || "http://127.0.0.1:4173/";
 const passwordPath = path.join(root, ".admin-password");
 const evidenceDir = path.join(root, "test-results", "smoke");
 const workbookPath = "/Users/pranay/Downloads/Oakridge MUN 2026 - Allocation Matrix (1).xlsx";
+const emailImagePath = path.join(root, "public", "oakridge-logo.png");
+const exerciseEmailImage = process.env.SKIP_EMAIL_IMAGE_UPLOAD !== "1";
 mkdirSync(evidenceDir, { recursive: true });
 const peoplePath = path.join(evidenceDir, "existing-test-people.csv");
 writeFileSync(peoplePath, "Full Name,Email Address,School\nNaga Pranay Immadi,nagapranayimmadi@gmail.com,Oakridge International School\nOakridge Test Contact,cattartzz@gmail.com,Oakridge International School\n");
@@ -27,6 +29,7 @@ const browser = await chromium.launch({ headless: true });
 const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
 const page = await context.newPage();
 const consoleErrors = [];
+let emailImageNavigationCleanupExercised = false;
 page.on("console", (message) => {
   if (message.type() === "error" && !message.text().startsWith("Blocked script execution in 'about:srcdoc'")) consoleErrors.push(message.text());
 });
@@ -44,6 +47,16 @@ async function axe(label) {
     throw new Error(`${label} has blocking Axe violations: ${JSON.stringify(detail)}`);
   }
   return results.violations.map((violation) => violation.id);
+}
+
+async function waitForStorageDeletion(url) {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const response = await context.request.get(url);
+    if ([404, 410].includes(response.status())) return;
+    if (!response.ok()) throw new Error(`Email image cleanup returned unexpected HTTP ${response.status()}.`);
+    await page.waitForTimeout(250);
+  }
+  throw new Error("An abandoned email image remained available after leaving Email Studio.");
 }
 
 try {
@@ -79,7 +92,15 @@ try {
   await page.frameLocator(".branded-email-frame").getByText("Oakridge MUN", { exact: true }).first().waitFor();
   await page.screenshot({ path: path.join(evidenceDir, "03-email-studio.png"), fullPage: true });
   const emailComposerAxe = await axe("Email composer");
-  await page.getByRole("button", { name: "Prepare Gmail drafts" }).click();
+  if (exerciseEmailImage) {
+    await page.getByLabel("Upload campaign images").setInputFiles(emailImagePath);
+    await page.getByText("oakridge-logo.png", { exact: true }).waitFor({ timeout: 30_000 });
+    await page.frameLocator(".branded-email-frame").locator('img[alt="oakridge logo"]').waitFor();
+    await page.screenshot({ path: path.join(evidenceDir, "03b-email-studio-image.png"), fullPage: true });
+    await page.getByRole("button", { name: "Remove oakridge-logo.png" }).click();
+    await page.getByText("oakridge-logo.png", { exact: true }).waitFor({ state: "detached", timeout: 30_000 });
+  }
+  await page.getByRole("button", { name: "Prepare drafts" }).click();
   await page.getByRole("heading", { name: "Email history" }).waitFor();
   await page.getByText("An update from Oakridge MUN", { exact: true }).first().waitFor();
   await page.screenshot({ path: path.join(evidenceDir, "04-email-history.png"), fullPage: true });
@@ -149,11 +170,25 @@ try {
   await page.waitForTimeout(400);
   await page.screenshot({ path: path.join(evidenceDir, "09-email-preview-mobile.png") });
 
+  if (exerciseEmailImage) {
+    await page.getByLabel("Upload campaign images").setInputFiles(emailImagePath);
+    await page.getByText("oakridge-logo.png", { exact: true }).waitFor({ timeout: 30_000 });
+    const abandonedImageUrl = await page.frameLocator(".branded-email-frame").locator('img[alt="oakridge logo"]').getAttribute("src");
+    if (!abandonedImageUrl) throw new Error("The uploaded email image URL was unavailable for cleanup verification.");
+    await page.getByRole("button", { name: "Open navigation" }).click();
+    await page.getByRole("link", { name: "Home", exact: true }).click();
+    await page.getByRole("heading", { name: "What needs doing?" }).waitFor();
+    await waitForStorageDeletion(abandonedImageUrl);
+    emailImageNavigationCleanupExercised = true;
+  }
+
   if (consoleErrors.length) throw new Error(`Browser errors: ${consoleErrors.join(" | ")}`);
   console.log(JSON.stringify({
     passed: true,
     firstRun,
-    screenshots: 11,
+    screenshots: exerciseEmailImage ? 12 : 11,
+    emailImageExercised: exerciseEmailImage,
+    emailImageNavigationCleanupExercised,
     axeNonBlockingViolations: { signInAxe, dashboardAxe, inboxAxe, contactsAxe, emailComposerAxe, emailAxe, formsAxe, excelAxe, mobileAxe, emailMobileAxe },
     workbookExercised: existsSync(workbookPath),
     passwordFile: ".admin-password (mode 0600; value not printed)",

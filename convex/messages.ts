@@ -1,6 +1,11 @@
 import { v } from "convex/values";
 import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
-import { canClaimProviderDelivery, canManuallyChangeStatus } from "./lib/mailDelivery";
+import {
+  canClaimProviderDelivery,
+  canFinalizeProviderDelivery,
+  canManuallyChangeStatus,
+  isProviderDeliveryLeaseExpired,
+} from "./lib/mailDelivery";
 import { requireUserId } from "./lib/requireUser";
 
 const manualMessageStatus = v.union(
@@ -78,6 +83,7 @@ export const claimProviderDelivery = internalMutation({
     ownerId: v.id("users"),
     contactId: v.id("contacts"),
     batchId: v.string(),
+    legacyBatchIds: v.optional(v.array(v.string())),
     recipientEmail: v.string(),
     recipientName: v.string(),
     senderEmail: v.string(),
@@ -85,6 +91,7 @@ export const claimProviderDelivery = internalMutation({
     subject: v.string(),
     bodyHtml: v.string(),
     bodyText: v.string(),
+    attemptToken: v.string(),
   },
   handler: async (ctx, args) => {
     const existing = await ctx.db
@@ -99,6 +106,20 @@ export const claimProviderDelivery = internalMutation({
     if (existing && !canClaimProviderDelivery(existing.status)) {
       return { claimed: false as const, status: existing.status };
     }
+    for (const legacyBatchId of new Set(args.legacyBatchIds ?? [])) {
+      if (legacyBatchId === args.batchId) continue;
+      const legacy = await ctx.db
+        .query("messages")
+        .withIndex("by_owner_provider_batch_contact", (q) => q
+          .eq("ownerId", args.ownerId)
+          .eq("provider", args.provider)
+          .eq("batchId", legacyBatchId)
+          .eq("contactId", args.contactId))
+        .unique();
+      if (legacy && !canClaimProviderDelivery(legacy.status)) {
+        return { claimed: false as const, status: legacy.status };
+      }
+    }
     const fields = {
       recipientEmail: args.recipientEmail,
       recipientName: args.recipientName,
@@ -110,6 +131,7 @@ export const claimProviderDelivery = internalMutation({
       providerMessageId: undefined,
       status: "sending" as const,
       providerError: undefined,
+      attemptToken: args.attemptToken,
       attemptCount: (existing?.attemptCount ?? 0) + 1,
       lastAttemptAt: now,
       updatedAt: now,
@@ -138,6 +160,7 @@ export const finalizeProviderDelivery = internalMutation({
     status: providerResultStatus,
     providerMessageId: v.optional(v.string()),
     providerError: v.optional(v.string()),
+    attemptToken: v.string(),
   },
   handler: async (ctx, args) => {
     const existing = await ctx.db
@@ -149,7 +172,7 @@ export const finalizeProviderDelivery = internalMutation({
         .eq("contactId", args.contactId))
       .unique();
     if (!existing) throw new Error("Provider delivery was not claimed.");
-    if (existing.status !== "sending") return existing._id;
+    if (!canFinalizeProviderDelivery(existing.status, existing.attemptToken, args.attemptToken)) return existing._id;
     const now = Date.now();
     await ctx.db.patch(existing._id, {
       status: args.status,
@@ -159,5 +182,27 @@ export const finalizeProviderDelivery = internalMutation({
       updatedAt: now,
     });
     return existing._id;
+  },
+});
+
+export const expireStaleProviderDeliveries = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const now = Date.now();
+    const candidates = await ctx.db
+      .query("messages")
+      .withIndex("by_status_last_attempt", (q) => q.eq("status", "sending"))
+      .take(100);
+    let expired = 0;
+    for (const message of candidates) {
+      if (!isProviderDeliveryLeaseExpired(message.status, message.lastAttemptAt, now, message.updatedAt)) continue;
+      await ctx.db.patch(message._id, {
+        status: "unknown",
+        providerError: "The delivery worker did not finish within 10 minutes. Check Sent mail before retrying.",
+        updatedAt: now,
+      });
+      expired += 1;
+    }
+    return { expired };
   },
 });
