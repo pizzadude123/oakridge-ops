@@ -64,7 +64,20 @@ export const disconnect = mutation({
       .query("inboxMessages")
       .withIndex("by_owner", (q) => q.eq("ownerId", ownerId))
       .collect();
+    const workbookConnection = await ctx.db
+      .query("workbookConnections")
+      .withIndex("by_owner", (q) => q.eq("ownerId", ownerId))
+      .unique();
     for (const message of messages) await ctx.db.delete(message._id);
+    if (workbookConnection) {
+      const [issues, alerts] = await Promise.all([
+        ctx.db.query("workbookIssues").withIndex("by_connection", (q) => q.eq("connectionId", workbookConnection._id)).collect(),
+        ctx.db.query("workbookAlerts").withIndex("by_owner", (q) => q.eq("ownerId", ownerId)).collect(),
+      ]);
+      for (const issue of issues) await ctx.db.delete(issue._id);
+      for (const alert of alerts) await ctx.db.delete(alert._id);
+      await ctx.db.delete(workbookConnection._id);
+    }
     if (connection) await ctx.db.delete(connection._id);
     return { deletedMessages: messages.length };
   },
@@ -162,6 +175,26 @@ export const completeConnection = internalMutation({
       codeVerifierIv: undefined,
       stateExpiresAt: undefined,
       updatedAt: now,
+    });
+  },
+});
+
+export const rotateRefreshToken = internalMutation({
+  args: {
+    ownerId: v.id("users"),
+    encryptedRefreshToken: v.string(),
+    refreshTokenIv: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const connection = await ctx.db
+      .query("graphConnections")
+      .withIndex("by_owner", (q) => q.eq("ownerId", args.ownerId))
+      .unique();
+    if (!connection) throw new Error("Microsoft account is not connected.");
+    await ctx.db.patch(connection._id, {
+      encryptedRefreshToken: args.encryptedRefreshToken,
+      refreshTokenIv: args.refreshTokenIv,
+      updatedAt: Date.now(),
     });
   },
 });

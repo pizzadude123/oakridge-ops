@@ -10,4 +10,11 @@ crons.interval(
   {},
 );
 
+crons.interval(
+  "Check connected Excel workbooks every five minutes",
+  { minutes: 5 },
+  internal.microsoftWorkbook.syncAllWorkbooks,
+  {},
+);
+
 export default crons;

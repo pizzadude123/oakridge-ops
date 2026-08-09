@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react";
-import { useMutation, useQuery } from "convex/react";
-import { AlertOctagon, CheckCircle2, Download, FileCheck2, FileWarning, School, UserRoundX } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useAction, useMutation, useQuery } from "convex/react";
+import { formatDistanceToNow } from "date-fns";
+import { AlertOctagon, Bell, BellRing, CheckCircle2, Download, ExternalLink, FileCheck2, FileWarning, Link2, RefreshCw, School, ShieldCheck, Unplug, UserRoundX } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { api } from "../../convex/_generated/api";
 import { FileDrop } from "../components/FileDrop";
@@ -8,14 +9,49 @@ import { PageHeader } from "../components/PageHeader";
 import { analyzeAllocations, buildRegistrationTimeline, type AllocationRow, type RegistrationRecord } from "../domain/operations";
 import { downloadCsv, parseAllocationFile } from "../lib/workbook";
 
+function relativeTime(value?: number | string) {
+  if (!value) return "Not yet";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "Unknown" : formatDistanceToNow(date, { addSuffix: true });
+}
+
 export function ExcelPage() {
   const storedAllocations = useQuery(api.operationsData.allocations);
   const storedRegistrations = useQuery(api.operationsData.registrations);
+  const liveStatus = useQuery(api.workbookData.status);
+  const liveAlerts = useQuery(api.workbookData.listAlerts, { limit: 10 });
   const replaceAllocations = useMutation(api.operationsData.replaceAllocations);
+  const connectWorkbook = useAction(api.microsoftWorkbook.connectWorkbook);
+  const syncWorkbook = useAction(api.microsoftWorkbook.syncNow);
+  const beginMicrosoftConnection = useAction(api.microsoftGraph.beginConnection);
+  const disconnectWorkbook = useMutation(api.workbookData.disconnect);
+  const acknowledgeAlerts = useMutation(api.workbookData.acknowledgeAlerts);
   const [busy, setBusy] = useState(false);
+  const [monitorBusy, setMonitorBusy] = useState<"microsoft" | "connect" | "sync" | "disconnect" | null>(null);
+  const [shareUrl, setShareUrl] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [monitorMessage, setMonitorMessage] = useState("");
+  const [monitorError, setMonitorError] = useState("");
   const [issueFilter, setIssueFilter] = useState<"all" | "duplicates" | "schools">("all");
+  const initializedAlerts = useRef(false);
+  const notifiedAlertIds = useRef(new Set<string>());
+
+  useEffect(() => {
+    if (!liveAlerts || typeof Notification === "undefined") return;
+    if (!initializedAlerts.current) {
+      for (const alert of liveAlerts) notifiedAlertIds.current.add(alert._id);
+      initializedAlerts.current = true;
+      return;
+    }
+    for (const alert of liveAlerts) {
+      if (notifiedAlertIds.current.has(alert._id)) continue;
+      notifiedAlertIds.current.add(alert._id);
+      if (!alert.acknowledgedAt && Notification.permission === "granted") {
+        new Notification("Oakridge workbook alert", { body: alert.message, tag: alert._id });
+      }
+    }
+  }, [liveAlerts]);
 
   const allocations: AllocationRow[] = useMemo(() => (storedAllocations ?? []).map((row) => ({ sheet: row.sheet, seatNumber: row.seatNumber, allocation: row.allocation, delegateName: row.delegateName, schoolName: row.schoolName })), [storedAllocations]);
   const registrations: RegistrationRecord[] = useMemo(() => (storedRegistrations ?? []).map((row) => ({ id: row._id, fullName: row.fullName, email: row.email, school: row.school, registeredAt: row.registeredAt, paymentStatus: row.paymentStatus, preference1: row.preference1, preference2: row.preference2, preference3: row.preference3 })), [storedRegistrations]);
@@ -31,6 +67,73 @@ export function ExcelPage() {
     if (issueFilter === "schools") return schools;
     return [...duplicates, ...seats, ...schools];
   }, [issueFilter, report]);
+
+  function resetMonitorFeedback() {
+    setMonitorError("");
+    setMonitorMessage("");
+  }
+
+  async function connectMicrosoft() {
+    setMonitorBusy("microsoft"); resetMonitorFeedback();
+    try {
+      const result = await beginMicrosoftConnection();
+      window.location.assign(result.authorizationUrl);
+    } catch (caught) {
+      setMonitorError(caught instanceof Error ? caught.message : "Could not start Microsoft authorization.");
+      setMonitorBusy(null);
+    }
+  }
+
+  async function connectLiveWorkbook() {
+    setMonitorBusy("connect"); resetMonitorFeedback();
+    try {
+      const result = await connectWorkbook({ shareUrl: shareUrl.trim() });
+      setShareUrl("");
+      setMonitorMessage(`${result.fileName} connected. The baseline check is running now.`);
+    } catch (caught) {
+      setMonitorError(caught instanceof Error ? caught.message : "Could not connect the live workbook.");
+    } finally {
+      setMonitorBusy(null);
+    }
+  }
+
+  async function checkLiveWorkbook() {
+    setMonitorBusy("sync"); resetMonitorFeedback();
+    try {
+      const result = await syncWorkbook();
+      setMonitorMessage(result.changed
+        ? `${result.issueCount ?? 0} issues checked; ${result.newIssueCount ?? 0} new and ${result.resolvedIssueCount ?? 0} resolved.`
+        : "The workbook has not changed since the previous check.");
+    } catch (caught) {
+      setMonitorError(caught instanceof Error ? caught.message : "The live workbook check failed.");
+    } finally {
+      setMonitorBusy(null);
+    }
+  }
+
+  async function removeLiveWorkbook() {
+    if (!window.confirm("Stop the five-minute workbook watcher? The most recently synchronized allocation data will remain available.")) return;
+    setMonitorBusy("disconnect"); resetMonitorFeedback();
+    try {
+      await disconnectWorkbook();
+      setMonitorMessage("Live workbook monitoring stopped. The latest allocation snapshot is still available.");
+    } catch (caught) {
+      setMonitorError(caught instanceof Error ? caught.message : "Could not disconnect the live workbook.");
+    } finally {
+      setMonitorBusy(null);
+    }
+  }
+
+  async function enableBrowserAlerts() {
+    if (typeof Notification === "undefined") {
+      setMonitorError("This browser does not support page notifications.");
+      return;
+    }
+    const permission = await Notification.requestPermission();
+    setMonitorMessage(permission === "granted"
+      ? "Browser alerts enabled while Oakridge Operations is open."
+      : "Browser alerts were not enabled. In-app alerts will still appear.");
+  }
 
   async function importFile(file: File) {
     setBusy(true); setError(""); setMessage("");
@@ -51,9 +154,58 @@ export function ExcelPage() {
 
   return (
     <div className="page">
-      <PageHeader eyebrow="Workbook safety check" title="Find the problems before delegates do" description="Upload the allocation workbook to catch double allocations, repeated seats, missing schools, and registration timing patterns." actions={issueRows.length ? <button className="button button--secondary" type="button" onClick={exportReport}><Download aria-hidden="true" /> Download issue list</button> : undefined} />
+      <PageHeader eyebrow="Workbook safety check" title="Find the problems before delegates do" description="Connect a OneDrive or SharePoint workbook for checks every five minutes, or upload a file for a one-time review." actions={issueRows.length ? <button className="button button--secondary" type="button" onClick={exportReport}><Download aria-hidden="true" /> Download issue list</button> : undefined} />
 
-      <FileDrop label={allocations.length ? "Check a newer workbook" : "Check allocation workbook"} description="The checker finds committee tables even when each sheet starts on a different row." busy={busy} onFile={importFile} />
+      {liveStatus === undefined || liveAlerts === undefined ? (
+        <section className="live-monitor-panel"><span className="spinner" /><p>Loading live workbook monitor…</p></section>
+      ) : (
+        <section className={`live-monitor-panel${liveStatus.connected ? " is-connected" : ""}`} aria-labelledby="live-monitor-title">
+          <div className="live-monitor-heading">
+            <span className="live-monitor-icon">{liveStatus.connected ? <BellRing aria-hidden="true" /> : <Link2 aria-hidden="true" />}</span>
+            <div><p className="eyebrow">Five-minute watcher</p><h2 id="live-monitor-title">{liveStatus.connected ? liveStatus.fileName : "Connect a live Excel workbook"}</h2><p>{liveStatus.connected ? "Convex checks Microsoft for changes every five minutes and records only new or resolved problems." : "Paste the Share link from an Excel workbook stored in OneDrive or SharePoint."}</p></div>
+            <span className="watcher-state"><RefreshCw aria-hidden="true" /> Every 5 minutes</span>
+          </div>
+
+          {!liveStatus.microsoftConnected ? (
+            <div className="live-monitor-setup">
+              <div><strong>Connect Microsoft first</strong><p>The authorization is read-only: <code>Mail.Read</code> keeps the Inbox working and <code>Files.Read</code> lets the watcher read the selected workbook. It cannot edit or delete the file.</p></div>
+              <button className="button button--primary" type="button" onClick={() => void connectMicrosoft()} disabled={monitorBusy !== null}>{monitorBusy === "microsoft" ? "Opening Microsoft…" : "Connect Microsoft"}</button>
+            </div>
+          ) : !liveStatus.connected ? (
+            <form className="live-monitor-form" onSubmit={(event) => { event.preventDefault(); void connectLiveWorkbook(); }}>
+              <label>Excel Share link<input type="url" value={shareUrl} onChange={(event) => setShareUrl(event.target.value)} placeholder="https://…sharepoint.com/…" required /></label>
+              <button className="button button--primary" type="submit" disabled={monitorBusy !== null || !shareUrl.trim()}>{monitorBusy === "connect" ? "Connecting…" : "Watch this workbook"}</button>
+              <small>In Excel: Share → Copy link. The signed-in Microsoft account must be able to open that link.</small>
+            </form>
+          ) : (
+            <>
+              <dl className="live-monitor-facts">
+                <div><dt>Watcher</dt><dd>{liveStatus.status === "syncing" ? "Checking now…" : liveStatus.status === "error" ? "Needs attention" : "Active"}</dd></div>
+                <div><dt>Last checked</dt><dd>{relativeTime(liveStatus.lastCheckedAt)}</dd></div>
+                <div><dt>Next check</dt><dd>{relativeTime(liveStatus.nextCheckAt)}</dd></div>
+                <div><dt>Last workbook change</dt><dd>{relativeTime(liveStatus.lastChangedAt)}</dd></div>
+                <div><dt>Current issues</dt><dd>{liveStatus.issueCount}</dd></div>
+                <div><dt>Latest change</dt><dd>{liveStatus.newIssueCount} new · {liveStatus.resolvedIssueCount} resolved</dd></div>
+              </dl>
+              <div className="live-monitor-actions">
+                <button className="button button--primary" type="button" onClick={() => void checkLiveWorkbook()} disabled={monitorBusy !== null || liveStatus.status === "syncing"}><RefreshCw aria-hidden="true" /> {monitorBusy === "sync" || liveStatus.status === "syncing" ? "Checking…" : "Check now"}</button>
+                {liveStatus.webUrl && <a className="button button--secondary" href={liveStatus.webUrl} target="_blank" rel="noreferrer">Open in Excel <ExternalLink aria-hidden="true" /></a>}
+                {typeof Notification !== "undefined" && Notification.permission !== "granted" && <button className="button button--secondary" type="button" onClick={() => void enableBrowserAlerts()}><Bell aria-hidden="true" /> Enable browser alerts</button>}
+                <button className="text-button danger-text" type="button" onClick={() => void removeLiveWorkbook()} disabled={monitorBusy !== null}><Unplug aria-hidden="true" /> {monitorBusy === "disconnect" ? "Disconnecting…" : "Stop watcher"}</button>
+              </div>
+              <p className="monitor-boundary"><ShieldCheck aria-hidden="true" /> In-app changes appear immediately after each check. Browser notifications work while Oakridge Operations is open; closed-browser alerts need a future email or web-push channel.</p>
+            </>
+          )}
+
+          {liveStatus.connected && liveStatus.lastError && <div className="inline-alert inline-alert--error">Last live check problem: {liveStatus.lastError}</div>}
+          {liveAlerts.length > 0 && <div className="monitor-alert-history"><div><strong>Recent watcher alerts</strong>{liveStatus.unacknowledgedAlerts > 0 && <button className="text-button" type="button" onClick={() => void acknowledgeAlerts()}>Mark read</button>}</div>{liveAlerts.slice(0, 3).map((alert) => <p key={alert._id} className={alert.acknowledgedAt ? "" : "is-new"}><span>{alert.kind === "new_issues" ? "New" : alert.kind === "resolved_issues" ? "Resolved" : "Error"}</span>{alert.message}<time dateTime={new Date(alert.createdAt).toISOString()}>{relativeTime(alert.createdAt)}</time></p>)}</div>}
+        </section>
+      )}
+      {monitorMessage && <div className="inline-alert inline-alert--success" role="status"><ShieldCheck aria-hidden="true" />{monitorMessage}</div>}
+      {monitorError && <div className="inline-alert inline-alert--error" role="alert">{monitorError}</div>}
+
+      <div className="manual-file-divider"><span>Manual fallback</span><p>Upload a local copy for a one-time check.</p></div>
+      <FileDrop label={allocations.length ? "Check a local workbook" : "Check allocation workbook"} description="The checker finds committee tables even when each sheet starts on a different row." busy={busy} onFile={importFile} />
       {message && <div className="inline-alert inline-alert--success" role="status"><CheckCircle2 aria-hidden="true" />{message}</div>}
       {error && <div className="inline-alert inline-alert--error" role="alert">{error}</div>}
 

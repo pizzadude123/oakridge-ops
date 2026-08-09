@@ -1,10 +1,44 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildGraphSendMailPayload,
   buildGmailComposeUrl,
+  buildOakridgeEmailHtml,
   matchRoutingRule,
   personalizeTemplate,
   type RoutingRule,
 } from "./email";
+
+describe("buildOakridgeEmailHtml", () => {
+  it("wraps editor content in a responsive branded email document", () => {
+    const html = buildOakridgeEmailHtml({
+      bodyHtml: "<p>Hello Pranay,</p><p>Your committee update is ready.</p>",
+      preheader: "Your Oakridge MUN update",
+    });
+
+    expect(html).toContain("<!doctype html>");
+    expect(html).toContain("@media only screen and (max-width: 620px)");
+    expect(html).toContain("https://pizzadude123.github.io/oakridge-ops/oakridge-logo.png");
+    expect(html).toContain("Oakridge MUN");
+    expect(html).toContain("Your committee update is ready.");
+    expect(html).toContain("#003057");
+  });
+});
+
+describe("buildGraphSendMailPayload", () => {
+  it("targets one recipient with a branded HTML body", () => {
+    const payload = buildGraphSendMailPayload({
+      recipientEmail: "aarav@example.com",
+      recipientName: "Aarav Rao",
+      subject: "Your DISEC allocation",
+      html: "<html><body>Oakridge</body></html>",
+    });
+
+    expect(payload.message.subject).toBe("Your DISEC allocation");
+    expect(payload.message.body).toEqual({ contentType: "HTML", content: "<html><body>Oakridge</body></html>" });
+    expect(payload.message.toRecipients).toEqual([{ emailAddress: { address: "aarav@example.com", name: "Aarav Rao" } }]);
+    expect(payload.saveToSentItems).toBe(true);
+  });
+});
 
 describe("personalizeTemplate", () => {
   it("replaces known merge fields and reports missing ones", () => {

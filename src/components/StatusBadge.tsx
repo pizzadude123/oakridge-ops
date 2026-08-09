@@ -10,7 +10,7 @@ const labels: Record<string, string> = {
   not_contacted: "Not contacted",
   draft: "Draft",
   opened_in_gmail: "Opened in Gmail",
-  sent: "Marked sent",
+  sent: "Sent via Outlook",
   failed: "Failed",
 };
 

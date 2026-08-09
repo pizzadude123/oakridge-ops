@@ -10,6 +10,8 @@ const passwordPath = path.join(root, ".admin-password");
 const evidenceDir = path.join(root, "test-results", "smoke");
 const workbookPath = "/Users/pranay/Downloads/Oakridge MUN 2026 - Allocation Matrix (1).xlsx";
 mkdirSync(evidenceDir, { recursive: true });
+const peoplePath = path.join(evidenceDir, "existing-test-people.csv");
+writeFileSync(peoplePath, "Full Name,Email Address,School\nNaga Pranay Immadi,nagapranayimmadi@gmail.com,Oakridge International School\nOakridge Test Contact,cattartzz@gmail.com,Oakridge International School\n");
 
 let firstRun = !existsSync(passwordPath);
 const createAccount = firstRun || process.env.CREATE_ACCOUNT === "1";
@@ -25,11 +27,13 @@ const browser = await chromium.launch({ headless: true });
 const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
 const page = await context.newPage();
 const consoleErrors = [];
-page.on("console", (message) => { if (message.type() === "error") consoleErrors.push(message.text()); });
+page.on("console", (message) => {
+  if (message.type() === "error" && !message.text().startsWith("Blocked script execution in 'about:srcdoc'")) consoleErrors.push(message.text());
+});
 page.on("pageerror", (error) => consoleErrors.push(error.message));
 
 async function axe(label) {
-  const results = await new AxeBuilder({ page }).analyze();
+  const results = await new AxeBuilder({ page }).exclude(".branded-email-frame").analyze();
   const blocking = results.violations.filter((violation) => ["critical", "serious"].includes(violation.impact ?? ""));
   if (blocking.length) {
     const detail = blocking.map((violation) => ({
@@ -39,7 +43,7 @@ async function axe(label) {
     }));
     throw new Error(`${label} has blocking Axe violations: ${JSON.stringify(detail)}`);
   }
-  return results.violations.length;
+  return results.violations.map((violation) => violation.id);
 }
 
 try {
@@ -69,11 +73,16 @@ try {
 
   await page.getByRole("link", { name: "Email" }).click();
   await page.getByRole("heading", { name: "Write once. Make it personal." }).waitFor();
-  await page.locator(".recipient-item").first().click();
-  await page.getByRole("button", { name: "Prepare drafts" }).click();
+  await page.locator('.recipient-rail input[type="file"]').setInputFiles(peoplePath);
+  await page.getByText(/0 new and 2 existing people are selected/).waitFor({ timeout: 30_000 });
+  await page.getByText("2 selected", { exact: true }).waitFor();
+  await page.frameLocator(".branded-email-frame").getByText("Oakridge MUN", { exact: true }).first().waitFor();
+  await page.screenshot({ path: path.join(evidenceDir, "03-email-studio.png"), fullPage: true });
+  const emailComposerAxe = await axe("Email composer");
+  await page.getByRole("button", { name: "Save drafts" }).click();
   await page.getByRole("heading", { name: "Email history" }).waitFor();
-  await page.getByText("Your Oakridge MUN allocation", { exact: true }).first().waitFor();
-  await page.screenshot({ path: path.join(evidenceDir, "03-email-history.png"), fullPage: true });
+  await page.getByText("An update from Oakridge MUN", { exact: true }).first().waitFor();
+  await page.screenshot({ path: path.join(evidenceDir, "04-email-history.png"), fullPage: true });
   const emailAxe = await axe("Email history");
 
   await page.getByRole("link", { name: "Forms" }).click();
@@ -93,7 +102,7 @@ try {
   await page.getByText(/Third preferences are visible/).waitFor();
   await page.getByRole("button", { name: "Recommend allocations" }).click();
   await page.getByText(/1st preference|2nd preference|Needs human decision/).first().waitFor();
-  await page.screenshot({ path: path.join(evidenceDir, "04-forms-preferences.png"), fullPage: true });
+  await page.screenshot({ path: path.join(evidenceDir, "05-forms-preferences.png"), fullPage: true });
   const formsAxe = await axe("Forms");
 
   await page.getByRole("link", { name: "Excel checks" }).click();
@@ -111,7 +120,7 @@ try {
   if (existsSync(workbookPath)) {
     await page.getByRole("heading", { name: /workbook issues|Workbook looks clear/ }).waitFor();
   }
-  await page.screenshot({ path: path.join(evidenceDir, "05-excel-diagnostics.png"), fullPage: true });
+  await page.screenshot({ path: path.join(evidenceDir, "06-excel-diagnostics.png"), fullPage: true });
   const excelAxe = await axe("Excel checks");
 
   await page.setViewportSize({ width: 390, height: 844 });
@@ -119,15 +128,23 @@ try {
   await page.getByRole("heading", { name: "What needs doing?" }).waitFor();
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   if (overflow > 1) throw new Error(`Mobile dashboard has ${overflow}px horizontal overflow.`);
-  await page.screenshot({ path: path.join(evidenceDir, "06-dashboard-mobile.png"), fullPage: true });
+  await page.screenshot({ path: path.join(evidenceDir, "07-dashboard-mobile.png"), fullPage: true });
   const mobileAxe = await axe("Mobile dashboard");
+
+  await page.getByRole("button", { name: "Open navigation" }).click();
+  await page.getByRole("link", { name: "Email", exact: true }).click();
+  await page.getByRole("heading", { name: "Write once. Make it personal." }).waitFor();
+  const emailMobileOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  if (emailMobileOverflow > 1) throw new Error(`Mobile Email Studio has ${emailMobileOverflow}px horizontal overflow.`);
+  await page.screenshot({ path: path.join(evidenceDir, "08-email-mobile.png"), fullPage: true });
+  const emailMobileAxe = await axe("Mobile Email Studio");
 
   if (consoleErrors.length) throw new Error(`Browser errors: ${consoleErrors.join(" | ")}`);
   console.log(JSON.stringify({
     passed: true,
     firstRun,
-    screenshots: 8,
-    axeNonBlockingViolations: { signInAxe, dashboardAxe, inboxAxe, contactsAxe, emailAxe, formsAxe, excelAxe, mobileAxe },
+    screenshots: 9,
+    axeNonBlockingViolations: { signInAxe, dashboardAxe, inboxAxe, contactsAxe, emailComposerAxe, emailAxe, formsAxe, excelAxe, mobileAxe, emailMobileAxe },
     workbookExercised: existsSync(workbookPath),
     passwordFile: ".admin-password (mode 0600; value not printed)",
   }, null, 2));

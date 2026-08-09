@@ -5,6 +5,7 @@ import {
   type AllocationRow,
   type RegistrationRecord,
 } from "../domain/operations";
+import { normalizePeopleRows, type PeopleImportResult } from "../domain/people";
 
 async function readWorkbook(file: File) {
   const data = await file.arrayBuffer();
@@ -26,6 +27,18 @@ export async function parseRegistrationFile(file: File): Promise<RegistrationRec
     throw new Error("No registration rows were found. Check that the first row contains column headings.");
   }
   return rows;
+}
+
+export async function parsePeopleFile(file: File): Promise<PeopleImportResult> {
+  const workbook = await readWorkbook(file);
+  const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+  if (!firstSheet) throw new Error("The file does not contain a worksheet.");
+  const rawRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(firstSheet, { defval: "", raw: false });
+  const result = normalizePeopleRows(rawRows);
+  if (!result.people.length) {
+    throw new Error("No valid people were found. Include a Name and Email column in the first worksheet.");
+  }
+  return result;
 }
 
 export async function parseAllocationFile(file: File): Promise<AllocationRow[]> {

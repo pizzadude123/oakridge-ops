@@ -35,9 +35,9 @@ export function DashboardPage() {
             <Sparkles aria-hidden="true" />
           </div>
           <h2>Send the next delegate update</h2>
-          <p>Pick people, write once, and preview the personalized version before Gmail opens.</p>
+          <p>Pick people, write once, preview each personalized version, and send from the connected Outlook account.</p>
           <Link className="button button--primary button--large" to="/email">Write an email <ArrowRight aria-hidden="true" /></Link>
-          <div className="safe-note"><strong>Safe by default.</strong> The app creates drafts; it never sends a batch without a human review.</div>
+          <div className="safe-note"><strong>Review before send.</strong> Every batch shows the sender, subject, personalization, and recipient count before Outlook receives it.</div>
         </article>
 
         <article className="attention-panel">

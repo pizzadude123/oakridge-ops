@@ -41,7 +41,7 @@ function Workspace() {
   return (
     <Suspense fallback={<div className="page-loader"><span className="spinner" /> Loading workspace…</div>}>
     <Routes>
-      <Route element={<AppShell gmailSender={status.settings?.gmailSender ?? "nagapranayimmadi@gmail.com"} />}>
+      <Route element={<AppShell />}>
         <Route index element={<DashboardPage />} />
         <Route path="email" element={<EmailPage />} />
         <Route path="inbox" element={<InboxPage />} />

@@ -17,11 +17,16 @@ import type * as http from "../http.js";
 import type * as imports from "../imports.js";
 import type * as lib_graphCrypto from "../lib/graphCrypto.js";
 import type * as lib_graphRouting from "../lib/graphRouting.js";
+import type * as lib_mailContent from "../lib/mailContent.js";
 import type * as lib_requireUser from "../lib/requireUser.js";
+import type * as lib_workbookMonitor from "../lib/workbookMonitor.js";
 import type * as messages from "../messages.js";
 import type * as microsoftGraph from "../microsoftGraph.js";
+import type * as microsoftMail from "../microsoftMail.js";
+import type * as microsoftWorkbook from "../microsoftWorkbook.js";
 import type * as operationsData from "../operationsData.js";
 import type * as routingRules from "../routingRules.js";
+import type * as workbookData from "../workbookData.js";
 import type * as workspace from "../workspace.js";
 
 import type {
@@ -40,11 +45,16 @@ declare const fullApi: ApiFromModules<{
   imports: typeof imports;
   "lib/graphCrypto": typeof lib_graphCrypto;
   "lib/graphRouting": typeof lib_graphRouting;
+  "lib/mailContent": typeof lib_mailContent;
   "lib/requireUser": typeof lib_requireUser;
+  "lib/workbookMonitor": typeof lib_workbookMonitor;
   messages: typeof messages;
   microsoftGraph: typeof microsoftGraph;
+  microsoftMail: typeof microsoftMail;
+  microsoftWorkbook: typeof microsoftWorkbook;
   operationsData: typeof operationsData;
   routingRules: typeof routingRules;
+  workbookData: typeof workbookData;
   workspace: typeof workspace;
 }>;
 

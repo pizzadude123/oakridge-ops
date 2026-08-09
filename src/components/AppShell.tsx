@@ -1,8 +1,11 @@
 import { useAuthActions } from "@convex-dev/auth/react";
+import { useQuery } from "convex/react";
+import gsap from "gsap";
 import { BarChart3, BookOpenCheck, ContactRound, Home, Inbox, LogOut, Mail, Menu, X } from "lucide-react";
-import { useState } from "react";
-import { NavLink, Outlet } from "react-router-dom";
+import { useLayoutEffect, useRef, useState } from "react";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
 import clsx from "clsx";
+import { api } from "../../convex/_generated/api";
 import { oakridgeLogoUrl } from "../lib/assets";
 
 const navigation = [
@@ -14,9 +17,22 @@ const navigation = [
   { to: "/excel", label: "Excel checks", icon: BarChart3 },
 ];
 
-export function AppShell({ gmailSender }: { gmailSender: string }) {
+export function AppShell() {
   const { signOut } = useAuthActions();
+  const graphStatus = useQuery(api.graphData.status);
+  const location = useLocation();
+  const main = useRef<HTMLElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const sender = graphStatus?.connected && graphStatus.email ? graphStatus.email : "Outlook not connected";
+
+  useLayoutEffect(() => {
+    const content = main.current?.firstElementChild;
+    if (!content || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const context = gsap.context(() => {
+      gsap.fromTo(content, { y: 8 }, { y: 0, duration: .42, ease: "power2.out", clearProps: "transform" });
+    }, main);
+    return () => context.revert();
+  }, [location.pathname]);
 
   return (
     <div className="app-shell">
@@ -40,7 +56,7 @@ export function AppShell({ gmailSender }: { gmailSender: string }) {
         </nav>
         <div className="sidebar-account">
           <span>Sending from</span>
-          <strong title={gmailSender}>{gmailSender}</strong>
+          <strong title={sender}>{sender}</strong>
           <button type="button" onClick={() => void signOut()}><LogOut aria-hidden="true" /> Sign out</button>
         </div>
       </aside>
@@ -49,7 +65,7 @@ export function AppShell({ gmailSender }: { gmailSender: string }) {
           <img src={oakridgeLogoUrl} alt="" />
           <span><strong>Oakridge MUN</strong><small>Operations</small></span>
         </header>
-        <main id="main-content" tabIndex={-1}>
+        <main ref={main} id="main-content" tabIndex={-1}>
           <Outlet />
         </main>
       </div>

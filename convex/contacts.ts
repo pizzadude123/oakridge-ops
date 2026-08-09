@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { internalQuery, mutation, query } from "./_generated/server";
 import { requireUserId } from "./lib/requireUser";
 
 const contactFields = {
@@ -43,6 +43,19 @@ export const list = query({
   },
 });
 
+export const forMailSend = internalQuery({
+  args: { ownerId: v.id("users"), contactIds: v.array(v.id("contacts")) },
+  handler: async (ctx, args) => {
+    const contacts = [];
+    for (const id of args.contactIds) {
+      const contact = await ctx.db.get(id);
+      if (!contact || contact.ownerId !== args.ownerId) throw new Error("One or more email recipients are unavailable.");
+      contacts.push(contact);
+    }
+    return contacts;
+  },
+});
+
 export const upsert = mutation({
   args: contactFields,
   handler: async (ctx, args) => {
@@ -59,6 +72,55 @@ export const upsert = mutation({
       return { id: existing._id, created: false };
     }
     return { id: await ctx.db.insert("contacts", value), created: true };
+  },
+});
+
+export const importPeople = mutation({
+  args: {
+    fileName: v.string(),
+    people: v.array(v.object({ fullName: v.string(), email: v.string(), school: v.string() })),
+  },
+  handler: async (ctx, args) => {
+    const ownerId = await requireUserId(ctx);
+    if (!args.people.length || args.people.length > 1000) throw new Error("Import between 1 and 1,000 people at a time.");
+    const contactIds = [];
+    let created = 0;
+    let updated = 0;
+    for (const person of args.people) {
+      const email = normalizeEmail(person.email);
+      if (!email.includes("@")) continue;
+      const existing = await ctx.db
+        .query("contacts")
+        .withIndex("by_owner_email", (q) => q.eq("ownerId", ownerId).eq("email", email))
+        .unique();
+      const now = Date.now();
+      if (existing) {
+        await ctx.db.patch(existing._id, {
+          fullName: person.fullName || existing.fullName,
+          school: person.school || existing.school,
+          source: `email_import:${args.fileName}`,
+          updatedAt: now,
+        });
+        contactIds.push(existing._id);
+        updated += 1;
+      } else {
+        const id = await ctx.db.insert("contacts", {
+          ownerId,
+          fullName: person.fullName,
+          email,
+          school: person.school,
+          department: "",
+          paymentStatus: "pending",
+          replyStatus: "not_contacted",
+          tags: ["excel-import"],
+          source: `email_import:${args.fileName}`,
+          updatedAt: now,
+        });
+        contactIds.push(id);
+        created += 1;
+      }
+    }
+    return { contactIds, created, updated };
   },
 });
 

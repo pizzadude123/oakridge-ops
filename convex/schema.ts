@@ -55,6 +55,9 @@ export default defineSchema({
     subject: v.string(),
     bodyHtml: v.string(),
     bodyText: v.string(),
+    provider: v.optional(v.union(v.literal("gmail_compose"), v.literal("microsoft_graph"))),
+    batchId: v.optional(v.string()),
+    providerError: v.optional(v.string()),
     status: v.union(
       v.literal("draft"),
       v.literal("opened_in_gmail"),
@@ -66,7 +69,8 @@ export default defineSchema({
     updatedAt: v.number(),
   })
     .index("by_owner", ["ownerId"])
-    .index("by_owner_status", ["ownerId", "status"]),
+    .index("by_owner_status", ["ownerId", "status"])
+    .index("by_owner_batch_contact", ["ownerId", "batchId", "contactId"]),
   imports: defineTable({
     ownerId: v.id("users"),
     kind: v.union(v.literal("registrations"), v.literal("allocations")),
@@ -99,6 +103,57 @@ export default defineSchema({
     importFile: v.string(),
     updatedAt: v.number(),
   }).index("by_owner", ["ownerId"]),
+  workbookConnections: defineTable({
+    ownerId: v.id("users"),
+    status: v.union(v.literal("connected"), v.literal("syncing"), v.literal("error")),
+    driveId: v.string(),
+    itemId: v.string(),
+    fileName: v.string(),
+    webUrl: v.optional(v.string()),
+    eTag: v.optional(v.string()),
+    lastModifiedAt: v.optional(v.string()),
+    connectedAt: v.number(),
+    lastCheckedAt: v.optional(v.number()),
+    nextCheckAt: v.optional(v.number()),
+    lastChangedAt: v.optional(v.number()),
+    totalSeats: v.optional(v.number()),
+    occupiedSeats: v.optional(v.number()),
+    issueCount: v.optional(v.number()),
+    newIssueCount: v.optional(v.number()),
+    resolvedIssueCount: v.optional(v.number()),
+    lastError: v.optional(v.string()),
+    updatedAt: v.number(),
+  })
+    .index("by_owner", ["ownerId"])
+    .index("by_status", ["status"]),
+  workbookIssues: defineTable({
+    ownerId: v.id("users"),
+    connectionId: v.id("workbookConnections"),
+    issueKey: v.string(),
+    type: v.union(v.literal("Double allocation"), v.literal("Duplicate seat"), v.literal("School missing")),
+    severity: v.union(v.literal("error"), v.literal("warning")),
+    delegate: v.string(),
+    location: v.string(),
+    action: v.string(),
+    status: v.union(v.literal("new"), v.literal("ongoing"), v.literal("resolved")),
+    firstSeenAt: v.number(),
+    lastSeenAt: v.number(),
+    resolvedAt: v.optional(v.number()),
+  })
+    .index("by_owner", ["ownerId"])
+    .index("by_connection", ["connectionId"])
+    .index("by_connection_key", ["connectionId", "issueKey"]),
+  workbookAlerts: defineTable({
+    ownerId: v.id("users"),
+    connectionId: v.id("workbookConnections"),
+    kind: v.union(v.literal("new_issues"), v.literal("resolved_issues"), v.literal("sync_error")),
+    message: v.string(),
+    issueCount: v.number(),
+    createdAt: v.number(),
+    acknowledgedAt: v.optional(v.number()),
+  })
+    .index("by_owner", ["ownerId"])
+    .index("by_owner_created", ["ownerId", "createdAt"]),
   settings: defineTable({
     ownerId: v.id("users"),
     gmailSender: v.string(),
