@@ -1,6 +1,5 @@
 "use node";
 
-import { getAuthUserId } from "@convex-dev/auth/server";
 import { v } from "convex/values";
 import * as XLSX from "xlsx";
 import { internal } from "./_generated/api";
@@ -10,6 +9,7 @@ import { buildWorkbookSnapshot, encodeGraphShareUrl } from "./lib/workbookMonito
 import { decryptGraphSecret, encryptGraphSecret } from "./lib/graphCrypto";
 import { ProviderTokenError, shouldRequireReauthorization } from "./lib/mailDelivery";
 import { extractAllocationRows } from "../src/domain/operations";
+import { requireAdministratorAction } from "./lib/requireUser";
 
 const GRAPH_SCOPES = "openid profile offline_access User.Read Mail.Read Mail.Send Files.Read";
 const MAX_WORKBOOK_BYTES = 25 * 1024 * 1024;
@@ -114,8 +114,7 @@ function assertExcelFile(item: DriveItem) {
 export const connectWorkbook = action({
   args: { shareUrl: v.string() },
   handler: async (ctx, args): Promise<{ fileName: string }> => {
-    const ownerId = await getAuthUserId(ctx);
-    if (!ownerId) throw new Error("Sign in before connecting a live workbook.");
+    const ownerId = await requireAdministratorAction(ctx, "Sign in before connecting a live workbook.");
     if (args.shareUrl.length > 2048) throw new Error("The workbook share link is too long.");
     const accessToken = await accessTokenForOwner(ctx, ownerId);
     const endpoint = new URL(`https://graph.microsoft.com/v1.0/shares/${encodeGraphShareUrl(args.shareUrl)}/driveItem`);
@@ -139,8 +138,7 @@ export const connectWorkbook = action({
 export const syncNow = action({
   args: {},
   handler: async (ctx): Promise<{ changed: boolean; rowCount?: number; issueCount?: number; newIssueCount?: number; resolvedIssueCount?: number }> => {
-    const ownerId = await getAuthUserId(ctx);
-    if (!ownerId) throw new Error("Sign in before checking the live workbook.");
+    const ownerId = await requireAdministratorAction(ctx, "Sign in before checking the live workbook.");
     return await ctx.runAction(internal.microsoftWorkbook.syncWorkbook, { ownerId, force: false });
   },
 });

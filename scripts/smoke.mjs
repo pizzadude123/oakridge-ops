@@ -6,9 +6,14 @@ import path from "node:path";
 
 const root = process.cwd();
 const appUrl = process.env.APP_URL || "http://127.0.0.1:4173/";
+const appOrigin = new URL(appUrl);
+if (appOrigin.protocol !== "http:" || !["127.0.0.1", "localhost"].includes(appOrigin.hostname)) {
+  throw new Error("The destructive smoke workflow is restricted to a loopback development frontend.");
+}
 const passwordPath = path.join(root, ".admin-password");
 const evidenceDir = path.join(root, "test-results", "smoke");
 const workbookPath = "/Users/pranay/Downloads/Oakridge MUN 2026 - Allocation Matrix (1).xlsx";
+const registrationFixturePath = path.join(root, "public", "Oakridge-MUN-Registration-Test.xlsx");
 const emailImagePath = path.join(root, "public", "oakridge-logo.png");
 const exerciseEmailImage = process.env.SKIP_EMAIL_IMAGE_UPLOAD !== "1";
 mkdirSync(evidenceDir, { recursive: true });
@@ -30,6 +35,7 @@ const context = await browser.newContext({ viewport: { width: 1440, height: 1000
 const page = await context.newPage();
 const consoleErrors = [];
 let emailImageNavigationCleanupExercised = false;
+let createdTestCrisis = false;
 page.on("console", (message) => {
   if (message.type() === "error" && !message.text().startsWith("Blocked script execution in 'about:srcdoc'")) consoleErrors.push(message.text());
 });
@@ -61,6 +67,12 @@ async function waitForStorageDeletion(url) {
 
 try {
   await page.goto(appUrl, { waitUntil: "networkidle" });
+  const runtimeConvexUrl = await page.evaluate(() => document.documentElement.dataset.convexUrl ?? "");
+  if (!runtimeConvexUrl) throw new Error("The destructive smoke workflow requires a Vite development build that exposes its runtime Convex URL.");
+  const runtimeConvexHost = new URL(runtimeConvexUrl).hostname;
+  if (!["127.0.0.1", "localhost", "host.docker.internal"].includes(runtimeConvexHost)) {
+    throw new Error(`The destructive smoke workflow refused the non-local Convex host ${runtimeConvexHost}.`);
+  }
   await page.getByRole("heading", { name: /Welcome back|Set the workspace password/ }).waitFor();
   await page.screenshot({ path: path.join(evidenceDir, "00-sign-in.png"), fullPage: true });
   const signInAxe = await axe("Sign in");
@@ -114,25 +126,63 @@ try {
 
   await page.getByRole("link", { name: "Forms" }).click();
   await page.getByRole("heading", { name: "Compare preferences without the spreadsheet hunt" }).waitFor();
-  const sampleButton = page.getByRole("button", { name: /Load a safe sample/ });
-  if (await sampleButton.count()) {
-    try {
-      await sampleButton.click({ timeout: 5_000 });
-      await page.getByText(/registrations imported and .* contacts synchronized/).waitFor({ timeout: 30_000 });
-    } catch {
-      await page.getByRole("heading", { name: "Who chose the same thing?" }).waitFor();
-    }
-  } else {
-    await page.getByRole("heading", { name: "Who chose the same thing?" }).waitFor();
-  }
-  await page.getByRole("button", { name: /Round 3/ }).click();
-  await page.getByText(/Third preferences are visible/).waitFor();
+  await page.locator('.file-drop input[type="file"]').setInputFiles(registrationFixturePath);
+  await page.getByText(/12 registrations imported and 12 contacts synchronized/).waitFor({ timeout: 30_000 });
+  await page.getByRole("heading", { name: "Demand, pressure, and fallback paths—together" }).waitFor();
+  await page.getByRole("heading", { name: "DISEC", exact: true }).waitFor();
   await page.getByRole("button", { name: "Recommend allocations" }).click();
   await page.getByText(/1st preference|2nd preference|Needs human decision/).first().waitFor();
+  await page.getByRole("button", { name: "Apply reviewed assignments to Contacts" }).click();
+  await page.getByText(/reviewed committee assignments applied to Contacts/).waitFor({ timeout: 30_000 });
   await page.screenshot({ path: path.join(evidenceDir, "05-forms-preferences.png"), fullPage: true });
   const formsAxe = await axe("Forms");
 
-  await page.getByRole("link", { name: "Excel checks" }).click();
+  await page.getByRole("link", { name: "Contacts", exact: true }).click();
+  await page.getByText("aanya.verma@example.com", { exact: true }).waitFor();
+
+  await page.getByRole("link", { name: "Delegate experience" }).click();
+  await page.getByRole("heading", { name: "Publish what happens beyond the committee room" }).waitFor();
+  const testCrisisHeadline = "Encrypted channel from Eastern Europe has gone silent";
+  if (await page.getByText(testCrisisHeadline, { exact: true }).count() === 0) {
+    await page.getByLabel("Channel").selectOption("jcc");
+    await page.getByLabel("Headline").fill(testCrisisHeadline);
+    await page.getByLabel("Full briefing").fill("Allied monitoring posts report a coordinated communications blackout across three rail corridors. The cause is unconfirmed. Cabinet members must distinguish confirmed infrastructure loss from assumptions about hostile action before issuing directives.");
+    await page.getByLabel("Affected portfolios or actors").fill("United States, Soviet Union, United Kingdom");
+    await page.getByLabel("Publish immediately to delegates").check();
+    await page.getByRole("button", { name: "Publish transmission" }).click();
+    await page.getByText(/Update .* published/).waitFor({ timeout: 30_000 });
+    createdTestCrisis = true;
+  }
+  await page.screenshot({ path: path.join(evidenceDir, "05b-experience-manager.png"), fullPage: true });
+  const experienceAxe = await axe("Experience manager");
+
+  await page.goto(`${appUrl}#/committees/disec`, { waitUntil: "networkidle" });
+  await page.getByRole("heading", { name: "DISEC", exact: true }).waitFor();
+  await page.getByRole("button", { name: /Local civilian ownership/ }).click();
+  await page.getByText("1/3 decisions locked", { exact: true }).waitFor();
+  const disecAxe = await axe("Public DISEC");
+  const disecOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  if (disecOverflow > 1) throw new Error(`DISEC has ${disecOverflow}px horizontal overflow.`);
+
+  await page.goto(`${appUrl}#/committees/armageddon`, { waitUntil: "networkidle" });
+  await page.getByRole("heading", { name: "ARMAGEDDON", exact: true }).waitFor();
+  const armageddonAxe = await axe("Public Armageddon");
+
+  await page.goto(`${appUrl}#/crisis/jcc-cold-war`, { waitUntil: "networkidle" });
+  await page.getByRole("heading", { name: testCrisisHeadline }).waitFor({ timeout: 30_000 });
+  await page.getByText("NOT A REAL-WORLD ALERT", { exact: true }).waitFor();
+  await page.screenshot({ path: path.join(evidenceDir, "05c-jcc-public-feed.png"), fullPage: true });
+  const crisisAxe = await axe("Public JCC crisis feed");
+
+  if (createdTestCrisis) {
+    await page.goto(`${appUrl}#/experience`, { waitUntil: "networkidle" });
+    const fixtureRow = page.locator(".crisis-update-history article").filter({ hasText: testCrisisHeadline });
+    page.once("dialog", (dialog) => void dialog.accept());
+    await fixtureRow.getByRole("button", { name: "Delete", exact: true }).click();
+    await fixtureRow.waitFor({ state: "detached" });
+  }
+
+  await page.goto(`${appUrl}#/excel`, { waitUntil: "networkidle" });
   let hasWorkbookSummary = false;
   try {
     await page.locator(".diagnostic-summary").waitFor({ timeout: 15_000 });
@@ -151,6 +201,30 @@ try {
   const excelAxe = await axe("Excel checks");
 
   await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`${appUrl}#/committees/disec`, { waitUntil: "networkidle" });
+  await page.getByRole("heading", { name: "DISEC", exact: true }).waitFor();
+  await page.waitForTimeout(1_600);
+  const disecMobileOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  if (disecMobileOverflow > 1) throw new Error(`Mobile DISEC has ${disecMobileOverflow}px horizontal overflow.`);
+  await page.screenshot({ path: path.join(evidenceDir, "07a-disec-mobile.png"), fullPage: true });
+  const disecMobileAxe = await axe("Mobile DISEC");
+
+  await page.goto(`${appUrl}#/committees/armageddon`, { waitUntil: "networkidle" });
+  await page.getByRole("heading", { name: "ARMAGEDDON", exact: true }).waitFor();
+  await page.waitForTimeout(1_600);
+  const armageddonMobileOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  if (armageddonMobileOverflow > 1) throw new Error(`Mobile Armageddon has ${armageddonMobileOverflow}px horizontal overflow.`);
+  await page.screenshot({ path: path.join(evidenceDir, "07b-armageddon-mobile.png"), fullPage: true });
+  const armageddonMobileAxe = await axe("Mobile Armageddon");
+
+  await page.goto(`${appUrl}#/crisis/jcc-cold-war`, { waitUntil: "networkidle" });
+  await page.getByText("NOT A REAL-WORLD ALERT", { exact: true }).waitFor();
+  await page.waitForTimeout(1_600);
+  const crisisMobileOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  if (crisisMobileOverflow > 1) throw new Error(`Mobile JCC crisis feed has ${crisisMobileOverflow}px horizontal overflow.`);
+  await page.screenshot({ path: path.join(evidenceDir, "07c-jcc-mobile.png"), fullPage: true });
+  const crisisMobileAxe = await axe("Mobile JCC crisis feed");
+
   await page.goto(appUrl, { waitUntil: "networkidle" });
   await page.getByRole("heading", { name: "What needs doing?" }).waitFor();
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
@@ -192,10 +266,10 @@ try {
   console.log(JSON.stringify({
     passed: true,
     firstRun,
-    screenshots: exerciseEmailImage ? 12 : 11,
+    screenshots: exerciseEmailImage ? 17 : 16,
     emailImageExercised: exerciseEmailImage,
     emailImageNavigationCleanupExercised,
-    axeNonBlockingViolations: { signInAxe, dashboardAxe, inboxAxe, contactsAxe, emailComposerAxe, emailAxe, formsAxe, excelAxe, mobileAxe, emailMobileAxe },
+    axeNonBlockingViolations: { signInAxe, dashboardAxe, inboxAxe, contactsAxe, emailComposerAxe, emailAxe, formsAxe, experienceAxe, disecAxe, armageddonAxe, crisisAxe, excelAxe, disecMobileAxe, armageddonMobileAxe, crisisMobileAxe, mobileAxe, emailMobileAxe },
     workbookExercised: existsSync(workbookPath),
     passwordFile: ".admin-password (mode 0600; value not printed)",
   }, null, 2));

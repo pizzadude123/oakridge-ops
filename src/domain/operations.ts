@@ -6,14 +6,37 @@ export type PaymentStatus =
 
 export type RegistrationRecord = {
   id: string;
+  responseId?: string;
   fullName: string;
   email: string;
   school: string;
   registeredAt: string;
+  startedAt?: string;
+  submittedAt?: string;
   paymentStatus: PaymentStatus;
   preference1: string;
   preference2: string;
   preference3: string;
+  answers?: Array<{ question: string; answer: string }>;
+};
+
+export type PreferenceDemand = {
+  choice: string;
+  firstCount: number;
+  secondCount: number;
+  thirdCount: number;
+  uniqueDelegates: number;
+  weightedDemand: number;
+  delegates: Array<{ registrationId: string; fullName: string; rank: 1 | 2 | 3 }>;
+};
+
+export type RegistrationQuality = {
+  total: number;
+  complete: number;
+  missingNames: number;
+  missingEmails: number;
+  missingPreferences: number;
+  duplicateEmails: string[];
 };
 
 export type AllocationCapacity = {
@@ -101,6 +124,8 @@ function preferenceMatcher(rank: 1 | 2 | 3) {
   const words = rank === 1 ? ["first", "1"] : rank === 2 ? ["second", "2"] : ["third", "3"];
   return (header: string) =>
     (header.includes("preference") || header.includes("choice")) &&
+    !header.includes("country") &&
+    !header.includes("portfolio") &&
     words.some((word) => header.includes(word));
 }
 
@@ -112,14 +137,19 @@ export function mapRegistrationRow(row: RawRow, id: string): RegistrationRecord 
       header.includes("delegatename") ||
       header === "name",
   );
-  const email = findValue(row, (header) => header.includes("email")).toLocaleLowerCase();
+  const email = (findValue(row, (header) =>
+    (header.includes("student") || header.includes("delegate") || header.includes("personal")) && header.includes("email"),
+  ) || findValue(row, (header) => header.includes("email") && !header.includes("parent"))).toLocaleLowerCase();
   const school = findValue(row, (header) => header.includes("school"));
-  const registeredAt = findValue(
+  const responseId = findValue(row, (header) => header === "responseid" || header === "responseidentifier");
+  const startedAt = findValue(row, (header) => header === "starttime" || header === "startedat");
+  const submittedAt = findValue(
     row,
     (header) =>
       header.includes("submissiontime") ||
       header.includes("timestamp") ||
       header.includes("completiontime") ||
+      header === "submittedat" ||
       header === "registeredat",
   );
   const payment = findValue(
@@ -129,14 +159,63 @@ export function mapRegistrationRow(row: RawRow, id: string): RegistrationRecord 
 
   return {
     id,
+    responseId,
     fullName,
     email,
     school,
-    registeredAt,
+    registeredAt: submittedAt,
+    startedAt,
+    submittedAt,
     paymentStatus: normalizePayment(payment),
     preference1: findValue(row, preferenceMatcher(1)),
     preference2: findValue(row, preferenceMatcher(2)),
     preference3: findValue(row, preferenceMatcher(3)),
+    answers: Object.entries(row).map(([question, answer]) => ({ question: clean(question), answer: clean(answer) })),
+  };
+}
+
+export function buildPreferenceDemand(registrations: RegistrationRecord[]): PreferenceDemand[] {
+  const demand = new Map<string, PreferenceDemand>();
+  for (const registration of registrations) {
+    ([registration.preference1, registration.preference2, registration.preference3] as const).forEach((rawChoice, index) => {
+      const choice = clean(rawChoice);
+      if (!choice) return;
+      const key = normalize(choice);
+      const rank = (index + 1) as 1 | 2 | 3;
+      const current = demand.get(key) ?? {
+        choice,
+        firstCount: 0,
+        secondCount: 0,
+        thirdCount: 0,
+        uniqueDelegates: 0,
+        weightedDemand: 0,
+        delegates: [],
+      };
+      if (!current.delegates.some(({ registrationId }) => registrationId === registration.id)) current.uniqueDelegates += 1;
+      current.delegates.push({ registrationId: registration.id, fullName: registration.fullName, rank });
+      if (rank === 1) current.firstCount += 1;
+      if (rank === 2) current.secondCount += 1;
+      if (rank === 3) current.thirdCount += 1;
+      current.weightedDemand += rank === 1 ? 3 : rank === 2 ? 2 : 1;
+      demand.set(key, current);
+    });
+  }
+  return [...demand.values()].sort((left, right) => right.weightedDemand - left.weightedDemand || left.choice.localeCompare(right.choice));
+}
+
+export function analyzeRegistrationQuality(registrations: RegistrationRecord[]): RegistrationQuality {
+  const emailCounts = new Map<string, number>();
+  for (const registration of registrations) {
+    const email = clean(registration.email).toLocaleLowerCase();
+    if (email) emailCounts.set(email, (emailCounts.get(email) ?? 0) + 1);
+  }
+  return {
+    total: registrations.length,
+    complete: registrations.filter((registration) => clean(registration.fullName) && clean(registration.email) && clean(registration.preference1)).length,
+    missingNames: registrations.filter((registration) => !clean(registration.fullName)).length,
+    missingEmails: registrations.filter((registration) => !clean(registration.email)).length,
+    missingPreferences: registrations.filter((registration) => !clean(registration.preference1) && !clean(registration.preference2) && !clean(registration.preference3)).length,
+    duplicateEmails: [...emailCounts.entries()].filter(([, count]) => count > 1).map(([email]) => email).sort(),
   };
 }
 

@@ -12,6 +12,7 @@ import "./brand-guidelines.css";
 
 const convexUrl = import.meta.env.VITE_CONVEX_URL as string | undefined;
 const convex = convexUrl ? new ConvexReactClient(convexUrl) : null;
+if (import.meta.env.DEV && convexUrl) document.documentElement.dataset.convexUrl = convexUrl;
 
 function MissingConfiguration() {
   return (

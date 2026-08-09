@@ -1,4 +1,3 @@
-import { getAuthUserId } from "@convex-dev/auth/server";
 import { v } from "convex/values";
 import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { routeInboxSubject } from "./lib/graphRouting";
@@ -305,9 +304,4 @@ export const storeSyncResults = internalMutation({
     });
     return { synced: args.messages.length };
   },
-});
-
-export const authenticatedOwnerId = internalQuery({
-  args: {},
-  handler: async (ctx) => await getAuthUserId(ctx),
 });

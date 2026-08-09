@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   analyzeAllocations,
+  analyzeRegistrationQuality,
+  buildPreferenceDemand,
   buildRegistrationTimeline,
   extractAllocationRows,
   groupRegistrationsByPreference,
@@ -71,14 +73,83 @@ describe("mapRegistrationRow", () => {
     });
   });
 
+  it("preserves response identity, timing, and every submitted field", () => {
+    const row = mapRegistrationRow({
+      "Response ID": "R-1042",
+      "Start time": "2026-08-09T09:00:00.000Z",
+      "Completion time": "2026-08-09T09:05:00.000Z",
+      "Delegate Full Name": "Aarav Rao",
+      "Student Email ID": "aarav@example.com",
+      "Committee Preference 1": "DISEC",
+      "Country Preference 1": "France",
+      "Receipt Number": "26OISS10001",
+      "Do you have any questions for us?": "Dietary support",
+    }, "row-3");
+
+    expect(row).toMatchObject({
+      responseId: "R-1042",
+      startedAt: "2026-08-09T09:00:00.000Z",
+      submittedAt: "2026-08-09T09:05:00.000Z",
+      registeredAt: "2026-08-09T09:05:00.000Z",
+    });
+    expect(row.answers).toContainEqual({ question: "Country Preference 1", answer: "France" });
+    expect(row.answers).toContainEqual({ question: "Receipt Number", answer: "26OISS10001" });
+    expect(row.answers).toHaveLength(9);
+  });
+
   it("keeps payment truth honest when a form only reports paid", () => {
     const row = mapRegistrationRow({ "Full name": "Mira", Payment: "yes" }, "row-2");
     expect(row.paymentStatus).toBe("reported_paid");
     expect(row.paymentStatus).not.toBe("verified_paid");
   });
+
+  it("does not confuse parent email or country preference with delegate fields", () => {
+    const row = mapRegistrationRow({
+      "Parent Email ID": "parent@example.com",
+      "Student Email ID": "delegate@example.com",
+      "Country Preference 1": "France",
+      "Committee Preference 1": "DISEC",
+    }, "row-4");
+    expect(row.email).toBe("delegate@example.com");
+    expect(row.preference1).toBe("DISEC");
+  });
 });
 
 describe("preference comparison", () => {
+  it("combines every rank into one transparent demand model", () => {
+    const demand = buildPreferenceDemand(registrations);
+    expect(demand.find((choice) => choice.choice === "UNSC")).toMatchObject({
+      firstCount: 2,
+      secondCount: 1,
+      thirdCount: 0,
+      uniqueDelegates: 3,
+      weightedDemand: 8,
+    });
+    expect(demand.find((choice) => choice.choice === "DISEC")).toMatchObject({
+      firstCount: 1,
+      secondCount: 1,
+      thirdCount: 1,
+      uniqueDelegates: 3,
+      weightedDemand: 6,
+    });
+  });
+
+  it("reports duplicate contacts and incomplete form responses before synchronization", () => {
+    const quality = analyzeRegistrationQuality([
+      ...registrations,
+      { ...registrations[0], id: "duplicate", fullName: "", preference1: "", preference2: "", preference3: "" },
+      { ...registrations[0], id: "missing-email", email: "" },
+    ]);
+    expect(quality).toMatchObject({
+      total: 5,
+      complete: 3,
+      missingNames: 1,
+      missingEmails: 1,
+      missingPreferences: 1,
+      duplicateEmails: ["aarav@example.com"],
+    });
+  });
+
   it("shows everyone with the same choice in an allocation round", () => {
     const grouped = groupRegistrationsByPreference(registrations, 1);
     expect(grouped.UNSC.map((person) => person.fullName)).toEqual([

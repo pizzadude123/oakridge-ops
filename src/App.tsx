@@ -3,10 +3,12 @@ import { Authenticated, AuthLoading, Unauthenticated, useMutation, useQuery } fr
 import { Navigate, Route, Routes } from "react-router-dom";
 import { api } from "../convex/_generated/api";
 import { AppShell } from "./components/AppShell";
+import { RouteBoundary } from "./components/RouteBoundary";
 import { SignIn } from "./components/SignIn";
 import { oakridgeLogoUrl } from "./lib/assets";
 import { importLazyRoute } from "./lib/lazyRoute";
 import { workspaceGateState } from "./domain/workspaceGate";
+import "./experience.css";
 
 const ContactsPage = lazy(() => importLazyRoute("contacts", () => import("./pages/ContactsPage").then((module) => ({ default: module.ContactsPage }))));
 const DashboardPage = lazy(() => importLazyRoute("dashboard", () => import("./pages/DashboardPage").then((module) => ({ default: module.DashboardPage }))));
@@ -14,6 +16,9 @@ const EmailPage = lazy(() => importLazyRoute("email", () => import("./pages/Emai
 const ExcelPage = lazy(() => importLazyRoute("excel", () => import("./pages/ExcelPage").then((module) => ({ default: module.ExcelPage }))));
 const FormsPage = lazy(() => importLazyRoute("forms", () => import("./pages/FormsPage").then((module) => ({ default: module.FormsPage }))));
 const InboxPage = lazy(() => importLazyRoute("inbox", () => import("./pages/InboxPage").then((module) => ({ default: module.InboxPage }))));
+const ExperiencePage = lazy(() => importLazyRoute("experience", () => import("./pages/ExperiencePage").then((module) => ({ default: module.ExperiencePage }))));
+const CommitteeDelegatePage = lazy(() => importLazyRoute("committee-delegate", () => import("./pages/public/CommitteeDelegatePage").then((module) => ({ default: module.CommitteeDelegatePage }))));
+const CrisisFeedPage = lazy(() => importLazyRoute("crisis-feed", () => import("./pages/public/CrisisFeedPage").then((module) => ({ default: module.CrisisFeedPage }))));
 
 function Workspace() {
   const status = useQuery(api.workspace.status);
@@ -55,13 +60,36 @@ function Workspace() {
         <Route path="contacts" element={<ContactsPage />} />
         <Route path="forms" element={<FormsPage />} />
         <Route path="excel" element={<ExcelPage />} />
+        <Route path="experience" element={<ExperiencePage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>
   );
 }
 
-export default function App() {
+function PublisherWorkspace() {
+  return (
+    <Routes>
+      <Route element={<AppShell publisherOnly />}>
+        <Route index element={<Navigate to="/experience" replace />} />
+        <Route path="experience" element={<ExperiencePage />} />
+        <Route path="*" element={<Navigate to="/experience" replace />} />
+      </Route>
+    </Routes>
+  );
+}
+
+function AuthorizedWorkspace() {
+  const access = useQuery(api.access.current);
+  if (access === undefined) {
+    return <main className="boot-screen" aria-live="polite"><div className="spinner" aria-hidden="true" /><h1>Checking staff access</h1></main>;
+  }
+  if (access?.role === "experience_publisher") return <PublisherWorkspace />;
+  if (access?.role === "administrator") return <Workspace />;
+  return <main className="configuration-error" role="alert"><h1>Access not enabled</h1><p>This account is not assigned an Oakridge staff capability.</p></main>;
+}
+
+function PrivateApplication() {
   return (
     <>
       <AuthLoading>
@@ -71,7 +99,15 @@ export default function App() {
         </main>
       </AuthLoading>
       <Unauthenticated><SignIn /></Unauthenticated>
-      <Authenticated><Workspace /></Authenticated>
+      <Authenticated><AuthorizedWorkspace /></Authenticated>
     </>
   );
+}
+
+export default function App() {
+  return <Routes>
+    <Route path="committees/:slug" element={<RouteBoundary><CommitteeDelegatePage /></RouteBoundary>} />
+    <Route path="crisis/:slug" element={<RouteBoundary><CrisisFeedPage /></RouteBoundary>} />
+    <Route path="*" element={<PrivateApplication />} />
+  </Routes>;
 }

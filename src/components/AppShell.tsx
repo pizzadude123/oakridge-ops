@@ -1,6 +1,6 @@
 import { useAuthActions } from "@convex-dev/auth/react";
 import gsap from "gsap";
-import { BarChart3, BookOpenCheck, ContactRound, Home, Inbox, LogOut, Mail, Menu, X } from "lucide-react";
+import { BarChart3, BookOpenCheck, ContactRound, Home, Inbox, LogOut, Mail, Menu, Presentation, X } from "lucide-react";
 import { useLayoutEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import clsx from "clsx";
@@ -16,13 +16,15 @@ const navigation = [
   { to: "/contacts", label: "Contacts", icon: ContactRound },
   { to: "/forms", label: "Forms", icon: BookOpenCheck },
   { to: "/excel", label: "Excel checks", icon: BarChart3 },
+  { to: "/experience", label: "Delegate experience", icon: Presentation },
 ];
 
-export function AppShell() {
+export function AppShell({ publisherOnly = false }: { publisherOnly?: boolean }) {
   const { signOut } = useAuthActions();
   const location = useLocation();
   const main = useRef<HTMLElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const visibleNavigation = publisherOnly ? navigation.filter((item) => item.to === "/experience") : navigation;
 
 
   useLayoutEffect(() => {
@@ -43,27 +45,27 @@ export function AppShell() {
         <div className="sidebar-topline">
           <div className="brand-lockup brand-lockup--light">
             <span className="brand-mark"><img src={oakridgeWhiteLogoUrl} alt="" /></span>
-            <span><strong>Oakridge MUN</strong><small>Operations</small></span>
+            <span><strong>Oakridge MUN</strong><small>{publisherOnly ? "EB Publisher" : "Operations"}</small></span>
           </div>
           <button className="sidebar-close" type="button" onClick={() => setMenuOpen(false)} aria-label="Close navigation"><X aria-hidden="true" /></button>
         </div>
         <nav aria-label="Main navigation">
-          {navigation.map(({ to, label, icon: Icon, end }) => (
+          {visibleNavigation.map(({ to, label, icon: Icon, end }) => (
             <NavLink key={to} to={to} end={end} onClick={() => setMenuOpen(false)} className={({ isActive }) => clsx("nav-link", isActive && "nav-link--active")}>
               <Icon aria-hidden="true" /><span>{label}</span>
             </NavLink>
           ))}
         </nav>
         <div className="sidebar-account">
-          <span>Default email</span>
-          <strong title={PRIMARY_SENDER}>{PRIMARY_SENDER}</strong>
+          <span>{publisherOnly ? "Restricted access" : "Default email"}</span>
+          <strong title={publisherOnly ? "Experience publisher" : PRIMARY_SENDER}>{publisherOnly ? "Experience publisher" : PRIMARY_SENDER}</strong>
           <button type="button" onClick={() => void signOut()}><LogOut aria-hidden="true" /> Sign out</button>
         </div>
       </aside>
       <div className="workspace">
         <header className="mobile-brand">
           <img src={oakridgeLogoUrl} alt="" />
-          <span><strong>Oakridge MUN</strong><small>Operations</small></span>
+          <span><strong>Oakridge MUN</strong><small>{publisherOnly ? "EB Publisher" : "Operations"}</small></span>
         </header>
         <main ref={main} id="main-content" tabIndex={-1}>
           <RouteBoundary><Outlet /></RouteBoundary>

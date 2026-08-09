@@ -1,6 +1,5 @@
 "use node";
 
-import { getAuthUserId } from "@convex-dev/auth/server";
 import { v } from "convex/values";
 import sanitizeHtml from "sanitize-html";
 import { internal } from "./_generated/api";
@@ -20,6 +19,7 @@ import {
 } from "./lib/mailDelivery";
 import { sanitizeEditorHtml } from "./lib/mailContent";
 import { prepareEmailAssets } from "./lib/prepareEmailAssets";
+import { requireAdministratorAction } from "./lib/requireUser";
 
 const GOOGLE_SCOPES = ["openid", "email", "profile", "https://www.googleapis.com/auth/gmail.send"];
 const MAX_RECIPIENTS_PER_REQUEST = 50;
@@ -118,8 +118,7 @@ function contactFields(contact: {
 export const beginConnection = action({
   args: {},
   handler: async (ctx): Promise<{ authorizationUrl: string }> => {
-    const ownerId = await getAuthUserId(ctx);
-    if (!ownerId) throw new Error("Sign in before connecting Google.");
+    const ownerId = await requireAdministratorAction(ctx, "Sign in before connecting Google.");
     const clientId = requiredEnv("GOOGLE_CLIENT_ID");
     const redirectUri = requiredEnv("GOOGLE_GMAIL_REDIRECT_URI");
     requiredEnv("GOOGLE_CLIENT_SECRET");
@@ -152,8 +151,7 @@ export const beginConnection = action({
 export const disconnect = action({
   args: {},
   handler: async (ctx): Promise<{ disconnected: true }> => {
-    const ownerId = await getAuthUserId(ctx);
-    if (!ownerId) throw new Error("Sign in before disconnecting Google.");
+    const ownerId = await requireAdministratorAction(ctx, "Sign in before disconnecting Google.");
     const connection = await ctx.runQuery(internal.googleData.connectionForSend, { ownerId });
     if (connection?.encryptedRefreshToken && connection.refreshTokenIv) {
       try {
@@ -195,8 +193,7 @@ export const sendPersonalizedBatch = action({
     senderEmail: string;
     failures: string[];
   }> => {
-    const ownerId = await getAuthUserId(ctx);
-    if (!ownerId) throw new Error("Sign in before sending email.");
+    const ownerId = await requireAdministratorAction(ctx, "Sign in before sending email.");
     const uniqueIds = [...new Set(args.contactIds)] as Id<"contacts">[];
     if (!uniqueIds.length || uniqueIds.length > MAX_RECIPIENTS_PER_REQUEST) {
       throw new Error(`Choose between 1 and ${MAX_RECIPIENTS_PER_REQUEST} recipients per send request.`);

@@ -1,10 +1,10 @@
-import { getAuthUserId } from "@convex-dev/auth/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { action, internalAction } from "./_generated/server";
 import { decryptGraphSecret, encryptGraphSecret, randomBase64Url, sha256Base64Url } from "./lib/graphCrypto";
 import { ProviderTokenError, shouldRequireReauthorization } from "./lib/mailDelivery";
+import { requireAdministratorAction } from "./lib/requireUser";
 
 const GRAPH_SCOPES = ["openid", "profile", "offline_access", "User.Read", "Mail.Read", "Mail.Send", "Files.Read"];
 
@@ -87,8 +87,7 @@ async function fetchInbox(accessToken: string) {
 export const beginConnection = action({
   args: { returnTo: v.optional(v.union(v.literal("email"), v.literal("inbox"), v.literal("excel"))) },
   handler: async (ctx, args): Promise<{ authorizationUrl: string }> => {
-    const ownerId = await getAuthUserId(ctx);
-    if (!ownerId) throw new Error("Sign in before connecting Microsoft Outlook.");
+    const ownerId = await requireAdministratorAction(ctx, "Sign in before connecting Microsoft Outlook.");
     const clientId = requiredEnv("MICROSOFT_CLIENT_ID");
     const redirectUri = requiredEnv("MICROSOFT_GRAPH_REDIRECT_URI");
     requiredEnv("MICROSOFT_CLIENT_SECRET");
@@ -122,8 +121,7 @@ export const beginConnection = action({
 export const syncNow = action({
   args: {},
   handler: async (ctx): Promise<{ synced: number }> => {
-    const ownerId = await getAuthUserId(ctx);
-    if (!ownerId) throw new Error("Sign in before synchronizing Microsoft Outlook.");
+    const ownerId = await requireAdministratorAction(ctx, "Sign in before synchronizing Microsoft Outlook.");
     return await ctx.runAction(internal.microsoftGraph.syncConnection, { ownerId });
   },
 });

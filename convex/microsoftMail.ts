@@ -1,6 +1,5 @@
 "use node";
 
-import { getAuthUserId } from "@convex-dev/auth/server";
 import { v } from "convex/values";
 import sanitizeHtml from "sanitize-html";
 import { internal } from "./_generated/api";
@@ -19,6 +18,7 @@ import {
 } from "./lib/mailDelivery";
 import { sanitizeEditorHtml } from "./lib/mailContent";
 import { prepareEmailAssets } from "./lib/prepareEmailAssets";
+import { requireAdministratorAction } from "./lib/requireUser";
 
 const GRAPH_SCOPES = "openid profile offline_access User.Read Mail.Read Mail.Send Files.Read";
 const MAX_RECIPIENTS_PER_REQUEST = 50;
@@ -143,8 +143,7 @@ export const sendPersonalizedBatch = action({
     senderEmail: string;
     failures: string[];
   }> => {
-    const ownerId = await getAuthUserId(ctx);
-    if (!ownerId) throw new Error("Sign in before sending email.");
+    const ownerId = await requireAdministratorAction(ctx, "Sign in before sending email.");
     const uniqueIds = [...new Set(args.contactIds)] as Id<"contacts">[];
     if (!uniqueIds.length || uniqueIds.length > MAX_RECIPIENTS_PER_REQUEST) {
       throw new Error(`Choose between 1 and ${MAX_RECIPIENTS_PER_REQUEST} recipients per send request.`);

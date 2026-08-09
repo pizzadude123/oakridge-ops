@@ -92,17 +92,53 @@ export default defineSchema({
   }).index("by_owner", ["ownerId"]),
   registrations: defineTable({
     ownerId: v.id("users"),
+    responseId: v.optional(v.string()),
     fullName: v.string(),
     email: v.string(),
     school: v.string(),
     registeredAt: v.string(),
+    startedAt: v.optional(v.string()),
+    submittedAt: v.optional(v.string()),
     paymentStatus,
     preference1: v.string(),
     preference2: v.string(),
     preference3: v.string(),
+    answers: v.optional(v.array(v.object({ question: v.string(), answer: v.string() }))),
     importFile: v.string(),
     updatedAt: v.number(),
   }).index("by_owner", ["ownerId"]),
+  committeeMedia: defineTable({
+    ownerId: v.id("users"),
+    committee: v.union(v.literal("disec"), v.literal("armageddon")),
+    title: v.string(),
+    speaker: v.string(),
+    description: v.string(),
+    videoUrl: v.string(),
+    published: v.boolean(),
+    updatedAt: v.number(),
+  })
+    .index("by_owner", ["ownerId"])
+    .index("by_owner_committee", ["ownerId", "committee"])
+    .index("by_committee", ["committee"])
+    .index("by_committee_published", ["committee", "published"]),
+  crisisUpdates: defineTable({
+    ownerId: v.id("users"),
+    channel: v.union(v.literal("jcc"), v.literal("armageddon")),
+    updateNumber: v.number(),
+    headline: v.string(),
+    briefing: v.string(),
+    severity: v.union(v.literal("advisory"), v.literal("breaking"), v.literal("critical")),
+    transmission: v.union(v.literal("intelligence"), v.literal("directive"), v.literal("broadcast")),
+    sourceLabel: v.string(),
+    affectedPortfolios: v.array(v.string()),
+    isPublished: v.boolean(),
+    publishedAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_owner", ["ownerId"])
+    .index("by_owner_channel", ["ownerId", "channel"])
+    .index("by_channel_published", ["channel", "isPublished", "publishedAt"]),
   allocationRows: defineTable({
     ownerId: v.id("users"),
     sheet: v.string(),

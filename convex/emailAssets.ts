@@ -1,7 +1,7 @@
-import { getAuthUserId } from "@convex-dev/auth/server";
 import { v } from "convex/values";
 import { internalMutation, internalQuery, mutation } from "./_generated/server";
 import { isEmailAssetExpired, validateEmailAssetMetadata, validateEmailAssetOwnerQuota } from "./lib/emailAssets";
+import { requireUserId } from "./lib/requireUser";
 
 function cleanFileName(value: string) {
   const clean = value.replace(/[\r\n\t]+/g, " ").replace(/\s+/g, " ").trim();
@@ -117,8 +117,7 @@ export const pruneExpired = internalMutation({
 export const remove = mutation({
   args: { id: v.id("emailAssets") },
   handler: async (ctx, args) => {
-    const ownerId = await getAuthUserId(ctx);
-    if (!ownerId) throw new Error("Sign in before removing email images.");
+    const ownerId = await requireUserId(ctx);
     const asset = await ctx.db.get(args.id);
     if (!asset || asset.ownerId !== ownerId) throw new Error("This email image is unavailable.");
     await ctx.storage.delete(asset.storageId);

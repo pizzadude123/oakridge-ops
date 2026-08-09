@@ -8,7 +8,9 @@
  * @module
  */
 
+import type * as access from "../access.js";
 import type * as auth from "../auth.js";
+import type * as committeeExperience from "../committeeExperience.js";
 import type * as contacts from "../contacts.js";
 import type * as crons from "../crons.js";
 import type * as emailAssets from "../emailAssets.js";
@@ -20,7 +22,9 @@ import type * as graphData from "../graphData.js";
 import type * as graphHttp from "../graphHttp.js";
 import type * as http from "../http.js";
 import type * as imports from "../imports.js";
+import type * as lib_access from "../lib/access.js";
 import type * as lib_emailAssets from "../lib/emailAssets.js";
+import type * as lib_experienceAccess from "../lib/experienceAccess.js";
 import type * as lib_gmailMessage from "../lib/gmailMessage.js";
 import type * as lib_graphCrypto from "../lib/graphCrypto.js";
 import type * as lib_graphRouting from "../lib/graphRouting.js";
@@ -45,7 +49,9 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  access: typeof access;
   auth: typeof auth;
+  committeeExperience: typeof committeeExperience;
   contacts: typeof contacts;
   crons: typeof crons;
   emailAssets: typeof emailAssets;
@@ -57,7 +63,9 @@ declare const fullApi: ApiFromModules<{
   graphHttp: typeof graphHttp;
   http: typeof http;
   imports: typeof imports;
+  "lib/access": typeof lib_access;
   "lib/emailAssets": typeof lib_emailAssets;
+  "lib/experienceAccess": typeof lib_experienceAccess;
   "lib/gmailMessage": typeof lib_gmailMessage;
   "lib/graphCrypto": typeof lib_graphCrypto;
   "lib/graphRouting": typeof lib_graphRouting;

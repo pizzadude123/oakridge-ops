@@ -1,22 +1,19 @@
 import { Password } from "@convex-dev/auth/providers/Password";
 import { convexAuth } from "@convex-dev/auth/server";
-
-const ALLOWED_EMAILS = new Set([
-  "nagapranayimmadi@gmail.com",
-  "nagapranay_immadi@oakridge.in",
-]);
+import { staffRoleForEmail } from "./lib/access";
 
 export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
   providers: [
     Password({
       profile(params) {
         const email = String(params.email ?? "").trim().toLocaleLowerCase();
-        if (!ALLOWED_EMAILS.has(email)) {
+        const role = staffRoleForEmail(email);
+        if (!role) {
           throw new Error("This private Oakridge workspace is not enabled for that email.");
         }
         return {
           email,
-          name: email === "nagapranayimmadi@gmail.com" ? "Naga Pranay Immadi" : "Oakridge MUN Admin",
+          name: email === "nagapranayimmadi@gmail.com" ? "Naga Pranay Immadi" : role === "administrator" ? "Oakridge MUN Admin" : "Oakridge MUN EB Publisher",
         };
       },
       validatePasswordRequirements(password) {

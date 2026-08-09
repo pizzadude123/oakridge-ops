@@ -1,4 +1,3 @@
-import { getAuthUserId } from "@convex-dev/auth/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { httpAction } from "./_generated/server";
@@ -7,6 +6,7 @@ import {
   validateEmailImageBytes,
   validateEmailUploadHeaders,
 } from "./lib/emailAssets";
+import { requireAdministratorAction } from "./lib/requireUser";
 
 function allowedOrigin() {
   const siteUrl = process.env.SITE_URL;
@@ -57,8 +57,7 @@ export const emailAssetUpload = httpAction(async (ctx, request) => {
   let registered = false;
   try {
     requireAllowedOrigin(request);
-    ownerId = await getAuthUserId(ctx);
-    if (!ownerId) return response(401, { error: "Sign in before uploading email images." });
+    ownerId = await requireAdministratorAction(ctx, "Sign in before uploading email images.");
     const { contentType, declaredSize } = validateEmailUploadHeaders({
       contentLength: request.headers.get("Content-Length"),
       contentType: request.headers.get("Content-Type"),
@@ -101,8 +100,9 @@ export const emailAssetUpload = httpAction(async (ctx, request) => {
     }
     const message = safeError(error);
     const status = message.includes("1 MB") ? 413
-      : message.includes("origin") ? 403
-        : 400;
+      : message.includes("Sign in") ? 401
+        : message.includes("origin") || message.includes("Administrator access") ? 403
+          : 400;
     return response(status, { error: message });
   }
 });

@@ -10,14 +10,18 @@ const paymentStatus = v.union(
 );
 
 const registrationRow = v.object({
+  responseId: v.optional(v.string()),
   fullName: v.string(),
   email: v.string(),
   school: v.string(),
   registeredAt: v.string(),
+  startedAt: v.optional(v.string()),
+  submittedAt: v.optional(v.string()),
   paymentStatus,
   preference1: v.string(),
   preference2: v.string(),
   preference3: v.string(),
+  answers: v.optional(v.array(v.object({ question: v.string(), answer: v.string() }))),
 });
 
 const allocationRow = v.object({
@@ -57,6 +61,7 @@ export const replaceRegistrations = mutation({
   },
   handler: async (ctx, { fileName, rows }) => {
     const ownerId = await requireUserId(ctx);
+    if (rows.length === 0) throw new Error("Import at least one registration. Existing registrations were not changed.");
     if (rows.length > 1500) throw new Error("Import at most 1,500 registrations at once.");
     const existingRows = await ctx.db
       .query("registrations")
@@ -119,6 +124,30 @@ export const replaceRegistrations = mutation({
   },
 });
 
+export const applyRecommendedCommittees = mutation({
+  args: {
+    assignments: v.array(v.object({ email: v.string(), committee: v.string() })),
+  },
+  handler: async (ctx, { assignments }) => {
+    const ownerId = await requireUserId(ctx);
+    if (assignments.length > 1500) throw new Error("Apply at most 1,500 assignments at once.");
+    let updatedCount = 0;
+    for (const assignment of assignments) {
+      const email = assignment.email.trim().toLocaleLowerCase();
+      const committee = assignment.committee.trim();
+      if (!email.includes("@") || !committee) continue;
+      const contact = await ctx.db
+        .query("contacts")
+        .withIndex("by_owner_email", (q) => q.eq("ownerId", ownerId).eq("email", email))
+        .unique();
+      if (!contact) continue;
+      await ctx.db.patch(contact._id, { assignedCommittee: committee, updatedAt: Date.now() });
+      updatedCount += 1;
+    }
+    return { updatedCount };
+  },
+});
+
 export const replaceAllocations = mutation({
   args: {
     fileName: v.string(),
@@ -127,6 +156,7 @@ export const replaceAllocations = mutation({
   },
   handler: async (ctx, { fileName, issueCount, rows }) => {
     const ownerId = await requireUserId(ctx);
+    if (rows.length === 0) throw new Error("Import at least one allocation row. Existing allocations were not changed.");
     if (rows.length > 2000) throw new Error("Import at most 2,000 allocation rows at once.");
     const existingRows = await ctx.db
       .query("allocationRows")
