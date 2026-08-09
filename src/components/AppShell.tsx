@@ -4,9 +4,9 @@ import { BarChart3, BookOpenCheck, ContactRound, Home, Inbox, LogOut, Mail, Menu
 import { useLayoutEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import clsx from "clsx";
-import { oakridgeLogoUrl } from "../lib/assets";
+import { oakridgeLogoUrl, oakridgeWhiteLogoUrl } from "../lib/assets";
 
-const PRIMARY_SENDER = "nagapranayimmadi@gmail.com";
+const PRIMARY_SENDER = "cattartzz@gmail.com";
 
 const navigation = [
   { to: "/", label: "Home", icon: Home, end: true },
@@ -41,7 +41,7 @@ export function AppShell() {
       <aside className={clsx("sidebar", menuOpen && "sidebar--open")}>
         <div className="sidebar-topline">
           <div className="brand-lockup brand-lockup--light">
-            <span className="brand-mark"><img src={oakridgeLogoUrl} alt="" /></span>
+            <span className="brand-mark"><img src={oakridgeWhiteLogoUrl} alt="" /></span>
             <span><strong>Oakridge MUN</strong><small>Operations</small></span>
           </div>
           <button className="sidebar-close" type="button" onClick={() => setMenuOpen(false)} aria-label="Close navigation"><X aria-hidden="true" /></button>
@@ -54,7 +54,7 @@ export function AppShell() {
           ))}
         </nav>
         <div className="sidebar-account">
-          <span>Sending from</span>
+          <span>Default email</span>
           <strong title={PRIMARY_SENDER}>{PRIMARY_SENDER}</strong>
           <button type="button" onClick={() => void signOut()}><LogOut aria-hidden="true" /> Sign out</button>
         </div>

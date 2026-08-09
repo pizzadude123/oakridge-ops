@@ -5,7 +5,7 @@ import type { Id } from "./_generated/dataModel";
 import { action, internalAction } from "./_generated/server";
 import { decryptGraphSecret, encryptGraphSecret, randomBase64Url, sha256Base64Url } from "./lib/graphCrypto";
 
-const GRAPH_SCOPES = ["openid", "profile", "offline_access", "User.Read", "Mail.Read", "Files.Read"];
+const GRAPH_SCOPES = ["openid", "profile", "offline_access", "User.Read", "Mail.Read", "Mail.Send", "Files.Read"];
 
 function requiredEnv(name: string) {
   const value = process.env[name];
@@ -14,7 +14,7 @@ function requiredEnv(name: string) {
 }
 
 function tenantAuthority() {
-  return process.env.MICROSOFT_TENANT_ID || "organizations";
+  return process.env.MICROSOFT_TENANT_ID || "common";
 }
 
 function safeError(error: unknown) {
@@ -88,15 +88,16 @@ export const beginConnection = action({
     const redirectUri = requiredEnv("MICROSOFT_GRAPH_REDIRECT_URI");
     requiredEnv("MICROSOFT_CLIENT_SECRET");
     const state = randomBase64Url(32);
+    const stateHash = await sha256Base64Url(state);
     const codeVerifier = randomBase64Url(64);
     const codeChallenge = await sha256Base64Url(codeVerifier);
     const encryptedVerifier = await encryptGraphSecret(codeVerifier);
-    await ctx.runMutation(internal.graphData.beginConnection, {
+    await ctx.runMutation(internal.graphData.createAuthAttempt, {
       ownerId,
-      pendingState: state,
+      stateHash,
       encryptedCodeVerifier: encryptedVerifier.ciphertext,
       codeVerifierIv: encryptedVerifier.iv,
-      stateExpiresAt: Date.now() + 10 * 60 * 1000,
+      expiresAt: Date.now() + 10 * 60 * 1000,
     });
     const authorization = new URL(`https://login.microsoftonline.com/${tenantAuthority()}/oauth2/v2.0/authorize`);
     authorization.searchParams.set("client_id", clientId);
@@ -150,7 +151,11 @@ export const syncConnection = internalAction({
       });
     } catch (error) {
       const message = safeError(error);
-      await ctx.runMutation(internal.graphData.markSyncError, { ownerId: args.ownerId, message });
+      if (message.startsWith("Microsoft authorization failed")) {
+        await ctx.runMutation(internal.graphData.markReauthorizationRequired, { ownerId: args.ownerId, message });
+      } else {
+        await ctx.runMutation(internal.graphData.markSyncError, { ownerId: args.ownerId, message });
+      }
       throw new Error(message, { cause: error });
     }
   },

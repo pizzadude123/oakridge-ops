@@ -82,7 +82,7 @@ export const bootstrap = mutation({
     }
     await ctx.db.insert("settings", {
       ownerId,
-      gmailSender: "nagapranayimmadi@gmail.com",
+      gmailSender: "cattartzz@gmail.com",
       workspaceName: "Oakridge MUN Operations",
       initializedAt: now,
     });

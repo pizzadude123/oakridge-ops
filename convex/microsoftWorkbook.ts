@@ -10,7 +10,7 @@ import { buildWorkbookSnapshot, encodeGraphShareUrl } from "./lib/workbookMonito
 import { decryptGraphSecret, encryptGraphSecret } from "./lib/graphCrypto";
 import { extractAllocationRows } from "../src/domain/operations";
 
-const GRAPH_SCOPES = "openid profile offline_access User.Read Mail.Read Files.Read";
+const GRAPH_SCOPES = "openid profile offline_access User.Read Mail.Read Mail.Send Files.Read";
 const MAX_WORKBOOK_BYTES = 25 * 1024 * 1024;
 
 function requiredEnv(name: string) {
@@ -20,7 +20,7 @@ function requiredEnv(name: string) {
 }
 
 function tenantAuthority() {
-  return process.env.MICROSOFT_TENANT_ID || "organizations";
+  return process.env.MICROSOFT_TENANT_ID || "common";
 }
 
 function safeError(error: unknown) {
@@ -68,7 +68,9 @@ async function accessTokenForOwner(ctx: ActionCtx, ownerId: Id<"users">) {
   });
   const body = await response.json() as TokenResponse;
   if (!response.ok || !body.access_token) {
-    throw new Error(`Microsoft authorization failed (${response.status}): ${body.error_description || body.error || "token unavailable"}`);
+    const message = `Microsoft authorization failed (${response.status}): ${body.error_description || body.error || "token unavailable"}`;
+    await ctx.runMutation(internal.graphData.markReauthorizationRequired, { ownerId, message });
+    throw new Error(message);
   }
   if (body.refresh_token) {
     const rotated = await encryptGraphSecret(body.refresh_token);

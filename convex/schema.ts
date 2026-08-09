@@ -55,22 +55,30 @@ export default defineSchema({
     subject: v.string(),
     bodyHtml: v.string(),
     bodyText: v.string(),
-    provider: v.optional(v.union(v.literal("gmail_compose"), v.literal("microsoft_graph"))),
+    provider: v.optional(v.union(v.literal("gmail_compose"), v.literal("google_gmail"), v.literal("microsoft_graph"))),
     batchId: v.optional(v.string()),
+    providerMessageId: v.optional(v.string()),
     providerError: v.optional(v.string()),
     status: v.union(
       v.literal("draft"),
       v.literal("opened_in_gmail"),
+      v.literal("sending"),
+      v.literal("accepted"),
       v.literal("sent"),
       v.literal("failed"),
+      v.literal("unknown"),
     ),
+    attemptCount: v.optional(v.number()),
+    lastAttemptAt: v.optional(v.number()),
+    providerAcceptedAt: v.optional(v.number()),
     sentAt: v.optional(v.number()),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
     .index("by_owner", ["ownerId"])
     .index("by_owner_status", ["ownerId", "status"])
-    .index("by_owner_batch_contact", ["ownerId", "batchId", "contactId"]),
+    .index("by_owner_batch_contact", ["ownerId", "batchId", "contactId"])
+    .index("by_owner_provider_batch_contact", ["ownerId", "provider", "batchId", "contactId"]),
   imports: defineTable({
     ownerId: v.id("users"),
     kind: v.union(v.literal("registrations"), v.literal("allocations")),
@@ -160,9 +168,20 @@ export default defineSchema({
     workspaceName: v.string(),
     initializedAt: v.number(),
   }).index("by_owner", ["ownerId"]),
+  graphOAuthAttempts: defineTable({
+    ownerId: v.id("users"),
+    stateHash: v.string(),
+    encryptedCodeVerifier: v.string(),
+    codeVerifierIv: v.string(),
+    expiresAt: v.number(),
+    consumedAt: v.optional(v.number()),
+    createdAt: v.number(),
+  })
+    .index("by_owner", ["ownerId"])
+    .index("by_state_hash", ["stateHash"]),
   graphConnections: defineTable({
     ownerId: v.id("users"),
-    status: v.union(v.literal("pending"), v.literal("connected"), v.literal("error")),
+    status: v.union(v.literal("pending"), v.literal("connected"), v.literal("reauthorization_required"), v.literal("error")),
     syncState: v.union(v.literal("idle"), v.literal("syncing"), v.literal("error")),
     pendingState: v.optional(v.string()),
     encryptedCodeVerifier: v.optional(v.string()),
@@ -182,6 +201,29 @@ export default defineSchema({
   })
     .index("by_owner", ["ownerId"])
     .index("by_state", ["pendingState"]),
+  googleOAuthAttempts: defineTable({
+    ownerId: v.id("users"),
+    stateHash: v.string(),
+    encryptedCodeVerifier: v.string(),
+    codeVerifierIv: v.string(),
+    expiresAt: v.number(),
+    consumedAt: v.optional(v.number()),
+    createdAt: v.number(),
+  })
+    .index("by_owner", ["ownerId"])
+    .index("by_state_hash", ["stateHash"]),
+  googleConnections: defineTable({
+    ownerId: v.id("users"),
+    status: v.union(v.literal("connected"), v.literal("reauthorization_required"), v.literal("error")),
+    encryptedRefreshToken: v.optional(v.string()),
+    refreshTokenIv: v.optional(v.string()),
+    googleUserId: v.optional(v.string()),
+    email: v.optional(v.string()),
+    displayName: v.optional(v.string()),
+    connectedAt: v.optional(v.number()),
+    lastError: v.optional(v.string()),
+    updatedAt: v.number(),
+  }).index("by_owner", ["ownerId"]),
   inboxMessages: defineTable({
     ownerId: v.id("users"),
     graphId: v.string(),

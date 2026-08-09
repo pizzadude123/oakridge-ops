@@ -38,7 +38,11 @@
 .sidebar-close { color: var(--beige); }
 .nav-link { color: rgba(250,245,237,.76); }
 .nav-link:hover { color: var(--beige); background: rgba(48,205,215,.13); }
+.sidebar .brand-mark { padding: 0; overflow: visible; border-radius: 0; background: transparent; box-shadow: none; }
+.sidebar .brand-mark img { object-fit: contain; }
+.nav-link { position: relative; overflow: hidden; }
 .nav-link--active { color: var(--blue); background: var(--beige); }
+.nav-link--active::before { position: absolute; top: 10px; bottom: 10px; left: 0; width: 4px; border-radius: 0 999px 999px 0; background: var(--cyan); content: ""; }
 .sidebar-account { border-color: rgba(250,245,237,.22); background: rgba(48,205,215,.08); }
 .sidebar-account span { color: rgba(250,245,237,.64); }
 .sidebar-account button { color: rgba(250,245,237,.84); }

@@ -10,8 +10,11 @@ const labels: Record<string, string> = {
   not_contacted: "Not contacted",
   draft: "Draft",
   opened_in_gmail: "Opened in Gmail",
-  sent: "Marked sent",
+  sending: "Sending",
+  accepted: "Provider accepted",
+  sent: "Sent",
   failed: "Failed",
+  unknown: "Check provider",
 };
 
 export function StatusBadge({ status }: { status: string }) {

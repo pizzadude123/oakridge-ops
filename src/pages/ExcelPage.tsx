@@ -168,7 +168,7 @@ export function ExcelPage() {
 
           {!liveStatus.microsoftConnected ? (
             <div className="live-monitor-setup">
-              <div><strong>Connect Microsoft first</strong><p>The authorization is read-only: <code>Mail.Read</code> keeps the Inbox working and <code>Files.Read</code> lets the watcher read the selected workbook. It cannot edit or delete the file.</p></div>
+              <div><strong>Connect Microsoft first</strong><p><code>Mail.Read</code> keeps the Inbox working and <code>Files.Read</code> lets the watcher read the selected workbook without editing or deleting it. Email Studio separately uses <code>Mail.Send</code> only after confirmation.</p></div>
               <button className="button button--primary" type="button" onClick={() => void connectMicrosoft()} disabled={monitorBusy !== null}>{monitorBusy === "microsoft" ? "Opening Microsoft…" : "Connect Microsoft"}</button>
             </div>
           ) : !liveStatus.connected ? (

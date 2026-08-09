@@ -35,9 +35,9 @@ export function DashboardPage() {
             <Sparkles aria-hidden="true" />
           </div>
           <h2>Send the next delegate update</h2>
-          <p>Pick people, write once, and preview each personalized Gmail draft before opening it.</p>
+          <p>Pick people, write once, preview every personalized message, then send with Google or Microsoft.</p>
           <Link className="button button--primary button--large" to="/email">Write an email <ArrowRight aria-hidden="true" /></Link>
-          <div className="safe-note"><strong>Safe by default.</strong> The app prepares individual drafts from nagapranayimmadi@gmail.com; Gmail still requires your review.</div>
+          <div className="safe-note"><strong>Safe by default.</strong> Every recipient gets a separate message and every provider send requires a final confirmation.</div>
         </article>
 
         <article className="attention-panel">

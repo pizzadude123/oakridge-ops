@@ -68,6 +68,10 @@ export const disconnect = mutation({
       .query("workbookConnections")
       .withIndex("by_owner", (q) => q.eq("ownerId", ownerId))
       .unique();
+    const attempts = await ctx.db
+      .query("graphOAuthAttempts")
+      .withIndex("by_owner", (q) => q.eq("ownerId", ownerId))
+      .collect();
     for (const message of messages) await ctx.db.delete(message._id);
     if (workbookConnection) {
       const [issues, alerts] = await Promise.all([
@@ -78,49 +82,41 @@ export const disconnect = mutation({
       for (const alert of alerts) await ctx.db.delete(alert._id);
       await ctx.db.delete(workbookConnection._id);
     }
+    for (const attempt of attempts) await ctx.db.delete(attempt._id);
     if (connection) await ctx.db.delete(connection._id);
     return { deletedMessages: messages.length };
   },
 });
 
-export const beginConnection = internalMutation({
+export const createAuthAttempt = internalMutation({
   args: {
     ownerId: v.id("users"),
-    pendingState: v.string(),
+    stateHash: v.string(),
     encryptedCodeVerifier: v.string(),
     codeVerifierIv: v.string(),
-    stateExpiresAt: v.number(),
+    expiresAt: v.number(),
   },
   handler: async (ctx, args) => {
     const existing = await ctx.db
-      .query("graphConnections")
+      .query("graphOAuthAttempts")
       .withIndex("by_owner", (q) => q.eq("ownerId", args.ownerId))
-      .unique();
-    const fields = {
-      status: "pending" as const,
-      syncState: "idle" as const,
-      pendingState: args.pendingState,
-      encryptedCodeVerifier: args.encryptedCodeVerifier,
-      codeVerifierIv: args.codeVerifierIv,
-      stateExpiresAt: args.stateExpiresAt,
-      lastError: undefined,
-      updatedAt: Date.now(),
-    };
-    if (existing) {
-      await ctx.db.patch(existing._id, fields);
-      return existing._id;
-    }
-    return await ctx.db.insert("graphConnections", { ownerId: args.ownerId, ...fields });
+      .collect();
+    for (const attempt of existing) await ctx.db.delete(attempt._id);
+    return await ctx.db.insert("graphOAuthAttempts", { ...args, createdAt: Date.now() });
   },
 });
 
-export const pendingByState = internalQuery({
-  args: { state: v.string() },
+export const consumeAuthAttempt = internalMutation({
+  args: { stateHash: v.string() },
   handler: async (ctx, args) => {
-    return await ctx.db
-      .query("graphConnections")
-      .withIndex("by_state", (q) => q.eq("pendingState", args.state))
+    const attempt = await ctx.db
+      .query("graphOAuthAttempts")
+      .withIndex("by_state_hash", (q) => q.eq("stateHash", args.stateHash))
       .unique();
+    if (!attempt || attempt.consumedAt) throw new Error("Microsoft authorization state is invalid or already used.");
+    if (attempt.expiresAt < Date.now()) throw new Error("Microsoft authorization expired. Start the connection again.");
+    await ctx.db.patch(attempt._id, { consumedAt: Date.now() });
+    return attempt;
   },
 });
 
@@ -158,9 +154,8 @@ export const completeConnection = internalMutation({
       .query("graphConnections")
       .withIndex("by_owner", (q) => q.eq("ownerId", args.ownerId))
       .unique();
-    if (!connection) throw new Error("Microsoft connection was not started.");
     const now = Date.now();
-    await ctx.db.patch(connection._id, {
+    const fields = {
       status: "connected",
       syncState: "idle",
       encryptedRefreshToken: args.encryptedRefreshToken,
@@ -175,7 +170,9 @@ export const completeConnection = internalMutation({
       codeVerifierIv: undefined,
       stateExpiresAt: undefined,
       updatedAt: now,
-    });
+    } as const;
+    if (connection) await ctx.db.patch(connection._id, fields);
+    else await ctx.db.insert("graphConnections", { ownerId: args.ownerId, ...fields });
   },
 });
 
@@ -206,15 +203,33 @@ export const markConnectionError = internalMutation({
       .query("graphConnections")
       .withIndex("by_owner", (q) => q.eq("ownerId", args.ownerId))
       .unique();
-    if (!connection) return;
-    await ctx.db.patch(connection._id, {
-      status: "error",
+    if (connection?.status === "connected") {
+      await ctx.db.patch(connection._id, { lastError: args.message, updatedAt: Date.now() });
+    } else if (connection) {
+      await ctx.db.patch(connection._id, { status: "error", syncState: "error", lastError: args.message, updatedAt: Date.now() });
+    } else {
+      await ctx.db.insert("graphConnections", {
+        ownerId: args.ownerId,
+        status: "error",
+        syncState: "error",
+        lastError: args.message,
+        updatedAt: Date.now(),
+      });
+    }
+  },
+});
+
+export const markReauthorizationRequired = internalMutation({
+  args: { ownerId: v.id("users"), message: v.string() },
+  handler: async (ctx, args) => {
+    const connection = await ctx.db
+      .query("graphConnections")
+      .withIndex("by_owner", (q) => q.eq("ownerId", args.ownerId))
+      .unique();
+    if (connection) await ctx.db.patch(connection._id, {
+      status: "reauthorization_required",
       syncState: "error",
       lastError: args.message,
-      pendingState: undefined,
-      encryptedCodeVerifier: undefined,
-      codeVerifierIv: undefined,
-      stateExpiresAt: undefined,
       updatedAt: Date.now(),
     });
   },
