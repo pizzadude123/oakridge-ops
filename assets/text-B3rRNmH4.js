@@ -1,0 +1,1 @@
+function e(e){return new DOMParser().parseFromString(e,`text/html`).body.textContent?.replace(/\u00a0/g,` `).trim()??``}function t(e){return e.split(/\s+/).filter(Boolean).slice(0,2).map(e=>e[0]?.toLocaleUpperCase()).join(``)||`?`}export{t as n,e as t};
