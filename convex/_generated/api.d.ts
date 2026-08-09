@@ -10,10 +10,16 @@
 
 import type * as auth from "../auth.js";
 import type * as contacts from "../contacts.js";
+import type * as crons from "../crons.js";
+import type * as graphData from "../graphData.js";
+import type * as graphHttp from "../graphHttp.js";
 import type * as http from "../http.js";
 import type * as imports from "../imports.js";
+import type * as lib_graphCrypto from "../lib/graphCrypto.js";
+import type * as lib_graphRouting from "../lib/graphRouting.js";
 import type * as lib_requireUser from "../lib/requireUser.js";
 import type * as messages from "../messages.js";
+import type * as microsoftGraph from "../microsoftGraph.js";
 import type * as operationsData from "../operationsData.js";
 import type * as routingRules from "../routingRules.js";
 import type * as workspace from "../workspace.js";
@@ -27,10 +33,16 @@ import type {
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   contacts: typeof contacts;
+  crons: typeof crons;
+  graphData: typeof graphData;
+  graphHttp: typeof graphHttp;
   http: typeof http;
   imports: typeof imports;
+  "lib/graphCrypto": typeof lib_graphCrypto;
+  "lib/graphRouting": typeof lib_graphRouting;
   "lib/requireUser": typeof lib_requireUser;
   messages: typeof messages;
+  microsoftGraph: typeof microsoftGraph;
   operationsData: typeof operationsData;
   routingRules: typeof routingRules;
   workspace: typeof workspace;

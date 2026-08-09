@@ -1,5 +1,5 @@
 import { useAuthActions } from "@convex-dev/auth/react";
-import { BarChart3, BookOpenCheck, ContactRound, Home, LogOut, Mail, Menu, X } from "lucide-react";
+import { BarChart3, BookOpenCheck, ContactRound, Home, Inbox, LogOut, Mail, Menu, X } from "lucide-react";
 import { useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import clsx from "clsx";
@@ -8,6 +8,7 @@ import { oakridgeLogoUrl } from "../lib/assets";
 const navigation = [
   { to: "/", label: "Home", icon: Home, end: true },
   { to: "/email", label: "Email", icon: Mail },
+  { to: "/inbox", label: "Inbox", icon: Inbox },
   { to: "/contacts", label: "Contacts", icon: ContactRound },
   { to: "/forms", label: "Forms", icon: BookOpenCheck },
   { to: "/excel", label: "Excel checks", icon: BarChart3 },

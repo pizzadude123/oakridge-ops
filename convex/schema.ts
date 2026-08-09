@@ -105,4 +105,44 @@ export default defineSchema({
     workspaceName: v.string(),
     initializedAt: v.number(),
   }).index("by_owner", ["ownerId"]),
+  graphConnections: defineTable({
+    ownerId: v.id("users"),
+    status: v.union(v.literal("pending"), v.literal("connected"), v.literal("error")),
+    syncState: v.union(v.literal("idle"), v.literal("syncing"), v.literal("error")),
+    pendingState: v.optional(v.string()),
+    encryptedCodeVerifier: v.optional(v.string()),
+    codeVerifierIv: v.optional(v.string()),
+    stateExpiresAt: v.optional(v.number()),
+    encryptedRefreshToken: v.optional(v.string()),
+    refreshTokenIv: v.optional(v.string()),
+    microsoftUserId: v.optional(v.string()),
+    email: v.optional(v.string()),
+    displayName: v.optional(v.string()),
+    connectedAt: v.optional(v.number()),
+    lastSyncedAt: v.optional(v.number()),
+    nextSyncAt: v.optional(v.number()),
+    messageCount: v.optional(v.number()),
+    lastError: v.optional(v.string()),
+    updatedAt: v.number(),
+  })
+    .index("by_owner", ["ownerId"])
+    .index("by_state", ["pendingState"]),
+  inboxMessages: defineTable({
+    ownerId: v.id("users"),
+    graphId: v.string(),
+    subject: v.string(),
+    senderName: v.string(),
+    senderAddress: v.string(),
+    receivedAt: v.string(),
+    isRead: v.boolean(),
+    preview: v.string(),
+    webLink: v.optional(v.string()),
+    routeRuleName: v.optional(v.string()),
+    routeDepartment: v.optional(v.string()),
+    routeRecipients: v.array(v.string()),
+    syncedAt: v.number(),
+  })
+    .index("by_owner", ["ownerId"])
+    .index("by_owner_graph_id", ["ownerId", "graphId"])
+    .index("by_owner_received", ["ownerId", "receivedAt"]),
 });

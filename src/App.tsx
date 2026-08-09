@@ -10,6 +10,7 @@ import { EmailPage } from "./pages/EmailPage";
 import { ExcelPage } from "./pages/ExcelPage";
 import { oakridgeLogoUrl } from "./lib/assets";
 import { FormsPage } from "./pages/FormsPage";
+import { InboxPage } from "./pages/InboxPage";
 
 function Workspace() {
   const status = useQuery(api.workspace.status);
@@ -41,6 +42,7 @@ function Workspace() {
       <Route element={<AppShell gmailSender={status.settings?.gmailSender ?? "nagapranayimmadi@gmail.com"} />}>
         <Route index element={<DashboardPage />} />
         <Route path="email" element={<EmailPage />} />
+        <Route path="inbox" element={<InboxPage />} />
         <Route path="contacts" element={<ContactsPage />} />
         <Route path="forms" element={<FormsPage />} />
         <Route path="excel" element={<ExcelPage />} />

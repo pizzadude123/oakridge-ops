@@ -5,12 +5,14 @@ import { randomBytes } from "node:crypto";
 import path from "node:path";
 
 const root = process.cwd();
+const appUrl = process.env.APP_URL || "http://127.0.0.1:4173/";
 const passwordPath = path.join(root, ".admin-password");
 const evidenceDir = path.join(root, "test-results", "smoke");
 const workbookPath = "/Users/pranay/Downloads/Oakridge MUN 2026 - Allocation Matrix (1).xlsx";
 mkdirSync(evidenceDir, { recursive: true });
 
 let firstRun = !existsSync(passwordPath);
+const createAccount = firstRun || process.env.CREATE_ACCOUNT === "1";
 if (firstRun) {
   writeFileSync(passwordPath, `${randomBytes(24).toString("base64url")}Aa1!
 `, { mode: 0o600 });
@@ -41,10 +43,10 @@ async function axe(label) {
 }
 
 try {
-  await page.goto("http://127.0.0.1:4173/", { waitUntil: "networkidle" });
+  await page.goto(appUrl, { waitUntil: "networkidle" });
   await page.getByLabel("Workspace password").fill(password);
-  if (firstRun) await page.getByRole("button", { name: /First time/ }).click();
-  await page.getByRole("button", { name: firstRun ? "Create private workspace" : "Open workspace" }).click();
+  if (createAccount) await page.getByRole("button", { name: /First time/ }).click();
+  await page.getByRole("button", { name: createAccount ? "Create private workspace" : "Open workspace" }).click();
   await page.getByRole("heading", { name: "What needs doing?" }).waitFor({ timeout: 30_000 });
   await page.screenshot({ path: path.join(evidenceDir, "01-dashboard-desktop.png"), fullPage: true });
   const dashboardAxe = await axe("Dashboard");
@@ -66,6 +68,7 @@ try {
   const emailAxe = await axe("Email history");
 
   await page.getByRole("link", { name: "Forms" }).click();
+  await page.getByRole("heading", { name: "Compare preferences without the spreadsheet hunt" }).waitFor();
   const sampleButton = page.getByRole("button", { name: /Load a safe sample/ });
   if (await sampleButton.count()) {
     await sampleButton.click();
@@ -99,7 +102,7 @@ try {
   const excelAxe = await axe("Excel checks");
 
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("http://127.0.0.1:4173/", { waitUntil: "networkidle" });
+  await page.goto(appUrl, { waitUntil: "networkidle" });
   await page.getByRole("heading", { name: "What needs doing?" }).waitFor();
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   if (overflow > 1) throw new Error(`Mobile dashboard has ${overflow}px horizontal overflow.`);
