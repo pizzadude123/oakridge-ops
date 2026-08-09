@@ -2,6 +2,7 @@ import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { httpAction } from "./_generated/server";
 import { decryptGraphSecret, encryptGraphSecret, sha256Base64Url } from "./lib/graphCrypto";
+import { providerConnectionRedirect } from "./lib/mailDelivery";
 
 function requiredEnv(name: string) {
   const value = process.env[name];
@@ -10,7 +11,7 @@ function requiredEnv(name: string) {
 }
 
 function appRedirect(result: "connected" | "error") {
-  return `${requiredEnv("SITE_URL").replace(/\/+$/, "")}/#/email?google=${result}`;
+  return `${requiredEnv("SITE_URL").replace(/\/+$/, "")}${providerConnectionRedirect("google", result)}`;
 }
 
 function safeError(error: unknown) {

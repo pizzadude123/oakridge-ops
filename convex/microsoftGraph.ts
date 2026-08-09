@@ -4,6 +4,7 @@ import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { action, internalAction } from "./_generated/server";
 import { decryptGraphSecret, encryptGraphSecret, randomBase64Url, sha256Base64Url } from "./lib/graphCrypto";
+import { ProviderTokenError, shouldRequireReauthorization } from "./lib/mailDelivery";
 
 const GRAPH_SCOPES = ["openid", "profile", "offline_access", "User.Read", "Mail.Read", "Mail.Send", "Files.Read"];
 
@@ -47,7 +48,11 @@ async function tokenRequest(parameters: Record<string, string>) {
   });
   const body = await response.json() as TokenResponse;
   if (!response.ok || !body.access_token) {
-    throw new Error(`Microsoft authorization failed (${response.status}): ${body.error_description || body.error || "token unavailable"}`);
+    throw new ProviderTokenError(
+      response.status,
+      body.error,
+      `Microsoft authorization failed (${response.status}): ${body.error_description || body.error || "token unavailable"}`,
+    );
   }
   return body;
 }
@@ -151,7 +156,7 @@ export const syncConnection = internalAction({
       });
     } catch (error) {
       const message = safeError(error);
-      if (message.startsWith("Microsoft authorization failed")) {
+      if (error instanceof ProviderTokenError && shouldRequireReauthorization(error.status, error.providerError)) {
         await ctx.runMutation(internal.graphData.markReauthorizationRequired, { ownerId: args.ownerId, message });
       } else {
         await ctx.runMutation(internal.graphData.markSyncError, { ownerId: args.ownerId, message });

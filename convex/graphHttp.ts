@@ -2,6 +2,7 @@ import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { httpAction } from "./_generated/server";
 import { decryptGraphSecret, encryptGraphSecret, sha256Base64Url } from "./lib/graphCrypto";
+import { providerConnectionRedirect } from "./lib/mailDelivery";
 
 const SCOPES = "openid profile offline_access User.Read Mail.Read Mail.Send Files.Read";
 
@@ -12,7 +13,7 @@ function requiredEnv(name: string) {
 }
 
 function appRedirect(result: "connected" | "error") {
-  return `${requiredEnv("SITE_URL").replace(/\/+$/, "")}/#/inbox?graph=${result}`;
+  return `${requiredEnv("SITE_URL").replace(/\/+$/, "")}${providerConnectionRedirect("microsoft", result)}`;
 }
 
 function safeError(error: unknown) {

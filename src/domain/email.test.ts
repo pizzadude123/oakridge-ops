@@ -5,6 +5,7 @@ import {
   buildOakridgeEmailHtml,
   matchRoutingRule,
   personalizeTemplate,
+  unresolvedFieldsForRecipients,
   type RoutingRule,
 } from "./email";
 
@@ -60,6 +61,19 @@ describe("personalizeTemplate", () => {
 
     expect(result.output).toContain("&lt;script&gt;");
     expect(result.output).not.toContain("<script>");
+  });
+
+  it("checks merge fields for every selected recipient, not only the preview", () => {
+    const unresolved = unresolvedFieldsForRecipients(
+      "Hello {{firstName}} — {{allocation}}",
+      "<p>{{school}}</p>",
+      [
+        { firstName: "Aarav", allocation: "France", school: "Oakridge" },
+        { firstName: "Maya", allocation: "", school: "Oakridge" },
+      ],
+    );
+
+    expect(unresolved).toEqual([{ recipientIndex: 1, fields: ["allocation"] }]);
   });
 });
 

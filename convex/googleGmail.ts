@@ -9,6 +9,13 @@ import { action } from "./_generated/server";
 import { buildOakridgeEmailHtml, personalizeTemplate } from "../src/domain/email";
 import { decryptGraphSecret, encryptGraphSecret, randomBase64Url, sha256Base64Url } from "./lib/graphCrypto";
 import { buildGmailRawMessage } from "./lib/gmailMessage";
+import {
+  classifyProviderHttpFailure,
+  providerCampaignMaterial,
+  ProviderTokenError,
+  readResponseTextSafely,
+  shouldRequireReauthorization,
+} from "./lib/mailDelivery";
 import { sanitizeEditorHtml } from "./lib/mailContent";
 
 const GOOGLE_SCOPES = ["openid", "email", "profile", "https://www.googleapis.com/auth/gmail.send"];
@@ -46,13 +53,17 @@ async function refreshAccessToken(refreshToken: string) {
   });
   const body = await response.json() as TokenResponse;
   if (!response.ok || !body.access_token) {
-    throw new Error(`Google authorization failed (${response.status}): ${body.error_description || body.error || "token unavailable"}`);
+    throw new ProviderTokenError(
+      response.status,
+      body.error,
+      `Google authorization failed (${response.status}): ${body.error_description || body.error || "token unavailable"}`,
+    );
   }
   return body;
 }
 
 async function gmailError(response: Response) {
-  const text = await response.text();
+  const text = await readResponseTextSafely(response);
   try {
     const body = JSON.parse(text) as { error?: { message?: string } };
     return body.error?.message?.slice(0, 240) || `Gmail rejected the message (${response.status}).`;
@@ -163,13 +174,14 @@ export const sendPersonalizedBatch = action({
     contactIds: v.array(v.id("contacts")),
     subjectTemplate: v.string(),
     bodyHtmlTemplate: v.string(),
-    batchId: v.string(),
     confirmation: v.string(),
   },
   handler: async (ctx, args): Promise<{
     accepted: number;
     failed: number;
-    skipped: number;
+    unknown: number;
+    inProgress: number;
+    alreadyAccepted: number;
     senderEmail: string;
     failures: string[];
   }> => {
@@ -180,9 +192,11 @@ export const sendPersonalizedBatch = action({
       throw new Error(`Choose between 1 and ${MAX_RECIPIENTS_PER_REQUEST} recipients per send request.`);
     }
     if (args.confirmation !== `SEND ${uniqueIds.length}`) throw new Error("Review and confirm the recipient count before sending.");
-    if (!/^[A-Za-z0-9_-]{8,100}$/.test(args.batchId)) throw new Error("The email campaign identifier is invalid.");
-    if (!args.subjectTemplate.trim() || args.subjectTemplate.length > 200) throw new Error("Add a subject under 200 characters.");
+    const subjectTemplate = args.subjectTemplate.trim();
+    if (!subjectTemplate || subjectTemplate.length > 200) throw new Error("Add a subject under 200 characters.");
     if (!args.bodyHtmlTemplate.trim() || args.bodyHtmlTemplate.length > 100_000) throw new Error("Add an email message before sending.");
+    const cleanTemplate = sanitizeEditorHtml(args.bodyHtmlTemplate).trim();
+    if (!cleanTemplate) throw new Error("Add an email message before sending.");
 
     const [connection, contacts] = await Promise.all([
       ctx.runQuery(internal.googleData.connectionForSend, { ownerId }),
@@ -191,11 +205,12 @@ export const sendPersonalizedBatch = action({
     if (!connection?.encryptedRefreshToken || !connection.refreshTokenIv || connection.status !== "connected") {
       throw new Error("Connect a Google account before sending email.");
     }
+    if (contacts.length !== uniqueIds.length) throw new Error("One or more selected recipients are unavailable. No emails were sent.");
     const senderEmail = connection.email || "Connected Google account";
-    const cleanTemplate = sanitizeEditorHtml(args.bodyHtmlTemplate);
+    const batchId = await sha256Base64Url(providerCampaignMaterial("google_gmail", subjectTemplate, cleanTemplate));
     const prepared = contacts.map((contact) => {
       const fields = contactFields(contact);
-      const personalizedSubject = personalizeTemplate(args.subjectTemplate, fields);
+      const personalizedSubject = personalizeTemplate(subjectTemplate, fields);
       const personalizedBody = personalizeTemplate(cleanTemplate, fields, "html");
       const unresolved = [...new Set([...personalizedSubject.unresolved, ...personalizedBody.unresolved])];
       if (unresolved.length) {
@@ -220,8 +235,11 @@ export const sendPersonalizedBatch = action({
       tokens = await refreshAccessToken(refreshToken);
     } catch (error) {
       const message = safeError(error);
-      await ctx.runMutation(internal.googleData.markReauthorizationRequired, { ownerId, message });
-      throw new Error("Google authorization expired or was revoked. Reconnect Google and try again.", { cause: error });
+      if (error instanceof ProviderTokenError && shouldRequireReauthorization(error.status, error.providerError)) {
+        await ctx.runMutation(internal.googleData.markReauthorizationRequired, { ownerId, message });
+        throw new Error("Google authorization expired or was revoked. Reconnect Google and try again.", { cause: error });
+      }
+      throw new Error("Google is temporarily unavailable. The connection remains active; try again later.", { cause: error });
     }
     if (tokens.refresh_token) {
       const encrypted = await encryptGraphSecret(tokens.refresh_token);
@@ -234,13 +252,15 @@ export const sendPersonalizedBatch = action({
 
     let accepted = 0;
     let failed = 0;
-    let skipped = 0;
+    let unknown = 0;
+    let inProgress = 0;
+    let alreadyAccepted = 0;
     const failures: string[] = [];
     for (const item of prepared) {
       const claim = await ctx.runMutation(internal.messages.claimProviderDelivery, {
         ownerId,
         contactId: item.contact._id,
-        batchId: args.batchId,
+        batchId,
         recipientEmail: item.contact.email,
         recipientName: item.contact.fullName,
         senderEmail,
@@ -250,7 +270,9 @@ export const sendPersonalizedBatch = action({
         bodyText: item.bodyText,
       });
       if (!claim.claimed) {
-        skipped += 1;
+        if (claim.status === "unknown") unknown += 1;
+        else if (claim.status === "sending") inProgress += 1;
+        else alreadyAccepted += 1;
         continue;
       }
       let status: "accepted" | "failed" | "unknown" = "unknown";
@@ -265,26 +287,30 @@ export const sendPersonalizedBatch = action({
           status = "accepted";
           accepted += 1;
         } else {
-          status = "failed";
-          providerError = await gmailError(response);
-          failed += 1;
+          status = classifyProviderHttpFailure(response.status);
+          const detail = await gmailError(response);
+          providerError = status === "unknown"
+            ? `Gmail send outcome is unknown. Check Sent mail before retrying. ${detail}`
+            : detail;
+          if (status === "failed") failed += 1;
+          else unknown += 1;
           failures.push(`${item.contact.fullName}: ${providerError}`);
         }
       } catch (error) {
         providerError = `Gmail send outcome is unknown. Check Sent mail before retrying. ${safeError(error)}`;
-        failed += 1;
+        unknown += 1;
         failures.push(`${item.contact.fullName}: ${providerError}`);
       }
       await ctx.runMutation(internal.messages.finalizeProviderDelivery, {
         ownerId,
         contactId: item.contact._id,
-        batchId: args.batchId,
+        batchId,
         provider: "google_gmail",
         providerMessageId,
         status,
         providerError,
       });
     }
-    return { accepted, failed, skipped, senderEmail, failures };
+    return { accepted, failed, unknown, inProgress, alreadyAccepted, senderEmail, failures };
   },
 });

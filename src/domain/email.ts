@@ -113,6 +113,20 @@ export function personalizeTemplate(
   return { output, unresolved: [...unresolved] };
 }
 
+export function unresolvedFieldsForRecipients(
+  subjectTemplate: string,
+  bodyHtmlTemplate: string,
+  recipients: MergeFields[],
+) {
+  return recipients.flatMap((fields, recipientIndex) => {
+    const unresolved = [...new Set([
+      ...personalizeTemplate(subjectTemplate, fields).unresolved,
+      ...personalizeTemplate(bodyHtmlTemplate, fields, "html").unresolved,
+    ])];
+    return unresolved.length ? [{ recipientIndex, fields: unresolved }] : [];
+  });
+}
+
 export function matchRoutingRule(
   subject: string,
   rules: RoutingRule[],

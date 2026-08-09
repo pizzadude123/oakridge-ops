@@ -8,6 +8,7 @@ import type { Id } from "./_generated/dataModel";
 import { action, internalAction, type ActionCtx } from "./_generated/server";
 import { buildWorkbookSnapshot, encodeGraphShareUrl } from "./lib/workbookMonitor";
 import { decryptGraphSecret, encryptGraphSecret } from "./lib/graphCrypto";
+import { ProviderTokenError, shouldRequireReauthorization } from "./lib/mailDelivery";
 import { extractAllocationRows } from "../src/domain/operations";
 
 const GRAPH_SCOPES = "openid profile offline_access User.Read Mail.Read Mail.Send Files.Read";
@@ -69,8 +70,11 @@ async function accessTokenForOwner(ctx: ActionCtx, ownerId: Id<"users">) {
   const body = await response.json() as TokenResponse;
   if (!response.ok || !body.access_token) {
     const message = `Microsoft authorization failed (${response.status}): ${body.error_description || body.error || "token unavailable"}`;
-    await ctx.runMutation(internal.graphData.markReauthorizationRequired, { ownerId, message });
-    throw new Error(message);
+    const error = new ProviderTokenError(response.status, body.error, message);
+    if (shouldRequireReauthorization(error.status, error.providerError)) {
+      await ctx.runMutation(internal.graphData.markReauthorizationRequired, { ownerId, message });
+    }
+    throw error;
   }
   if (body.refresh_token) {
     const rotated = await encryptGraphSecret(body.refresh_token);

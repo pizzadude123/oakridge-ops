@@ -6,7 +6,13 @@ import clsx from "clsx";
 import { useLocation } from "react-router-dom";
 import { api } from "../../convex/_generated/api";
 import type { Doc } from "../../convex/_generated/dataModel";
-import { buildGmailComposeUrl, buildOakridgeEmailHtml, matchRoutingRule, personalizeTemplate } from "../domain/email";
+import {
+  providerRetryAction,
+  summarizeProviderDelivery,
+  summarizeProviderDeliveryInterruption,
+  type ProviderResultCounts,
+} from "../../convex/lib/mailDelivery";
+import { buildGmailComposeUrl, buildOakridgeEmailHtml, matchRoutingRule, personalizeTemplate, unresolvedFieldsForRecipients } from "../domain/email";
 import { PageHeader } from "../components/PageHeader";
 import { RichEditor } from "../components/RichEditor";
 import { StatusBadge } from "../components/StatusBadge";
@@ -27,6 +33,10 @@ const mergeFields = [
 
 type Tab = "write" | "routing" | "history";
 type MailProvider = "google" | "microsoft";
+
+function emptyProviderResultCounts(): ProviderResultCounts {
+  return { accepted: 0, failed: 0, unknown: 0, inProgress: 0, alreadyAccepted: 0 };
+}
 
 function connectionNotice(search: string) {
   const parameters = new URLSearchParams(search);
@@ -76,8 +86,9 @@ export function EmailPage() {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState(() => connectionNotice(location.search));
   const [sendConfirmed, setSendConfirmed] = useState(false);
-  const [campaignId, setCampaignId] = useState("");
   const [sendError, setSendError] = useState("");
+  const [deliveryCounts, setDeliveryCounts] = useState<ProviderResultCounts>(emptyProviderResultCounts);
+  const [sendInterrupted, setSendInterrupted] = useState(false);
   const [testSubject, setTestSubject] = useState("Allocation question from a delegate");
 
   const visibleContacts = useMemo(() => (contacts ?? []).filter((contact) =>
@@ -86,6 +97,11 @@ export function EmailPage() {
       || (peopleFilter === "outstanding" && contact.replyStatus === "awaiting_reply"),
   ), [contacts, peopleFilter]);
   const selectedContacts = (contacts ?? []).filter((contact) => selected.has(contact._id));
+  const selectedRecipientIssues = unresolvedFieldsForRecipients(
+    subject,
+    bodyHtml,
+    selectedContacts.map(contactFields),
+  );
   const previewContact = selectedContacts[0] ?? visibleContacts[0];
   const previewSubject = previewContact ? personalizeTemplate(subject, contactFields(previewContact)) : null;
   const previewBody = previewContact ? personalizeTemplate(bodyHtml, contactFields(previewContact), "html") : null;
@@ -97,6 +113,7 @@ export function EmailPage() {
     ? (googleStatus?.connected && googleStatus.email ? googleStatus.email : SENDER)
     : (microsoftStatus?.connected && microsoftStatus.email ? microsoftStatus.email : "Microsoft account not connected");
   const providerLabel = mailProvider === "google" ? "Google" : "Microsoft";
+  const retryAction = providerRetryAction(deliveryCounts, sendInterrupted);
   const previewDocument = previewBody && previewSubject
     ? buildOakridgeEmailHtml({ bodyHtml: DOMPurify.sanitize(previewBody.output), preheader: previewSubject.output })
     : "";
@@ -157,47 +174,57 @@ export function EmailPage() {
 
   function reviewSend() {
     setNotice(""); setSendError(""); setSendConfirmed(false);
+    setDeliveryCounts(emptyProviderResultCounts()); setSendInterrupted(false);
     if (!providerConnected) {
       setNotice(`Connect ${providerLabel} before sending. You can still prepare manual Gmail drafts now.`);
       return;
     }
-    setCampaignId(`${mailProvider}_${crypto.randomUUID().replaceAll("-", "_")}`);
+    const issue = selectedRecipientIssues[0];
+    if (issue) {
+      const contact = selectedContacts[issue.recipientIndex];
+      setNotice(`${contact.fullName} is missing ${issue.fields.map((field) => `{{${field}}}`).join(", ")}. No emails were sent.`);
+      return;
+    }
     sendDialog.current?.showModal();
   }
 
   async function sendNow() {
-    if (!sendConfirmed || !selectedContacts.length || !campaignId) return;
+    if (!sendConfirmed || !selectedContacts.length) return;
+    const counts = emptyProviderResultCounts();
+    const failures: string[] = [];
+    setDeliveryCounts({ ...counts }); setSendInterrupted(false);
     setBusy(true); setSendError("");
     try {
-      let accepted = 0;
-      let failed = 0;
-      let skipped = 0;
-      const failures: string[] = [];
       for (let offset = 0; offset < selectedContacts.length; offset += 50) {
         const chunk = selectedContacts.slice(offset, offset + 50);
         const args = {
           contactIds: chunk.map((contact) => contact._id),
           subjectTemplate: subject,
           bodyHtmlTemplate: bodyHtml,
-          batchId: `${campaignId}_${Math.floor(offset / 50)}`,
           confirmation: `SEND ${chunk.length}`,
         };
         const result = mailProvider === "google" ? await sendGoogleBatch(args) : await sendMicrosoftBatch(args);
-        accepted += result.accepted;
-        failed += result.failed;
-        skipped += result.skipped;
+        counts.accepted += result.accepted;
+        counts.failed += result.failed;
+        counts.unknown += result.unknown;
+        counts.inProgress += result.inProgress;
+        counts.alreadyAccepted += result.alreadyAccepted;
         failures.push(...result.failures);
+        setDeliveryCounts({ ...counts });
       }
-      const summary = `${accepted} ${accepted === 1 ? "email was" : "emails were"} accepted by ${providerLabel}${failed ? `; ${failed} failed` : ""}${skipped ? `; ${skipped} already-successful sends were skipped` : ""}.`;
-      if (failed) {
-        setSendError(`${summary} ${failures.slice(0, 3).join(" · ")}`);
+      const summary = summarizeProviderDelivery(counts, providerLabel);
+      if (!summary.safeToClose) {
+        setSendError(`${summary.message} ${failures.slice(0, 3).join(" · ")}`.trim());
       } else {
         sendDialog.current?.close();
-        setNotice(summary);
+        setNotice(summary.message);
         setTab("history");
       }
     } catch (cause) {
-      setSendError(cause instanceof Error ? cause.message : `${providerLabel} could not send this email batch.`);
+      const message = cause instanceof Error ? cause.message : `${providerLabel} could not send this email batch.`;
+      setDeliveryCounts({ ...counts });
+      setSendInterrupted(true);
+      setSendError(summarizeProviderDeliveryInterruption(counts, providerLabel, message, selectedContacts.length));
     } finally { setBusy(false); }
   }
 
@@ -218,6 +245,12 @@ export function EmailPage() {
 
   async function prepareDrafts() {
     if (!selectedContacts.length) return;
+    const issue = selectedRecipientIssues[0];
+    if (issue) {
+      const contact = selectedContacts[issue.recipientIndex];
+      setNotice(`${contact.fullName} is missing ${issue.fields.map((field) => `{{${field}}}`).join(", ")}. No drafts were saved.`);
+      return;
+    }
     setBusy(true); setNotice("");
     try {
       for (const contact of selectedContacts) {
@@ -289,7 +322,7 @@ export function EmailPage() {
             <label className="subject-field">Subject<input value={subject} onChange={(event) => setSubject(event.target.value)} placeholder="What is this email about?" /></label>
             <div className="merge-fields"><span>Personalize:</span>{mergeFields.map(([label, token]) => <button key={token} type="button" onClick={() => insertField(token)}>+ {label}</button>)}</div>
             <RichEditor value={bodyHtml} onChange={setBodyHtml} />
-            <div className="composer-footer"><div><strong>{selected.size || 0} personalized email{selected.size === 1 ? "" : "s"}</strong><small>Each person receives a separate message—never a visible bulk list.</small></div><div className="composer-actions"><button className="button button--secondary" type="button" disabled={!selected.size || busy || unresolved.length > 0} onClick={() => void prepareDrafts()}><Save aria-hidden="true" /> Prepare drafts</button><button className="button button--primary" type="button" disabled={!selected.size || busy || unresolved.length > 0} onClick={() => providerConnected ? reviewSend() : void connectProvider(mailProvider)}><Send aria-hidden="true" /> {providerConnected ? "Review & send" : `Connect ${providerLabel}`}</button></div></div>
+            <div className="composer-footer"><div><strong>{selected.size || 0} personalized email{selected.size === 1 ? "" : "s"}</strong><small>Each person receives a separate message—never a visible bulk list.</small></div><div className="composer-actions"><button className="button button--secondary" type="button" disabled={!selected.size || busy || selectedRecipientIssues.length > 0} onClick={() => void prepareDrafts()}><Save aria-hidden="true" /> Prepare drafts</button><button className="button button--primary" type="button" disabled={!selected.size || busy || selectedRecipientIssues.length > 0} onClick={() => providerConnected ? reviewSend() : void connectProvider(mailProvider)}><Send aria-hidden="true" /> {providerConnected ? "Review & send" : `Connect ${providerLabel}`}</button></div></div>
 
           </section>
 
@@ -346,7 +379,7 @@ export function EmailPage() {
           <div className="send-recipient-sample">{selectedContacts.slice(0, 5).map((contact) => <span key={contact._id}>{contact.fullName} <small>{contact.email}</small></span>)}{selectedContacts.length > 5 && <span>+ {selectedContacts.length - 5} more</span>}</div>
           <label className="send-confirmation"><input type="checkbox" checked={sendConfirmed} onChange={(event) => setSendConfirmed(event.target.checked)} /><span>I reviewed the provider, sender, subject, message, and recipient count.</span></label>
           {sendError && <div className="inline-alert inline-alert--warning" role="alert">{sendError}</div>}
-          <div className="modal-actions"><button type="button" className="button button--ghost" disabled={busy} onClick={() => sendDialog.current?.close()}>Cancel</button><button type="button" className="button button--primary" disabled={!sendConfirmed || busy} onClick={() => void sendNow()}><Send aria-hidden="true" /> {busy ? "Sending…" : sendError ? "Retry failed emails" : `Send with ${providerLabel}`}</button></div>
+          <div className="modal-actions"><button type="button" className="button button--ghost" disabled={busy} onClick={() => sendDialog.current?.close()}>Cancel</button><button type="button" className="button button--primary" disabled={!sendConfirmed || busy || (Boolean(sendError) && retryAction.disabled)} onClick={() => void sendNow()}><Send aria-hidden="true" /> {busy ? "Sending…" : sendError ? retryAction.label : `Send with ${providerLabel}`}</button></div>
         </form>
       </dialog>
     </div>
