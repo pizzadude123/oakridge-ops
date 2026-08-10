@@ -19,6 +19,29 @@ export function canLinkCrisisAttachment(
     && (!linkedUpdateId || linkedUpdateId === targetUpdateId);
 }
 
+export function canUseCrisisAttachmentForUpdate(args: {
+  role: StaffRole;
+  actorId: string;
+  attachmentId: string;
+  attachmentOwnerId: string;
+  attachmentUpdateId?: string;
+  targetUpdateId?: string;
+  existingAttachmentId?: string;
+}) {
+  const preservingExistingLink = Boolean(
+    args.targetUpdateId
+      && args.attachmentUpdateId === args.targetUpdateId
+      && args.attachmentId === args.existingAttachmentId,
+  );
+  return preservingExistingLink || canLinkCrisisAttachment(
+    args.role,
+    args.actorId,
+    args.attachmentOwnerId,
+    args.attachmentUpdateId,
+    args.targetUpdateId,
+  );
+}
+
 export function isCrisisAttachmentLinked(updateId: string, attachmentUpdateId?: string) {
   return Boolean(attachmentUpdateId && attachmentUpdateId === updateId);
 }
@@ -27,7 +50,6 @@ export function isCrisisAttachmentPublic(
   updatePublished: boolean,
   updateId: string,
   attachmentUpdateId: string | undefined,
-  storageUrl: string | null,
 ) {
-  return updatePublished && isCrisisAttachmentLinked(updateId, attachmentUpdateId) && Boolean(storageUrl);
+  return updatePublished && isCrisisAttachmentLinked(updateId, attachmentUpdateId);
 }

@@ -2,7 +2,9 @@ import { makeFunctionReference } from "convex/server";
 import type { Id } from "./_generated/dataModel";
 import { httpAction } from "./_generated/server";
 import {
+  readStreamWithLimit,
   validateCrisisAttachmentBytes,
+  validateCrisisAttachmentFileName,
   validateCrisisAttachmentMetadata,
   validateCrisisUploadHeaders,
 } from "./lib/crisisAttachments";
@@ -11,6 +13,7 @@ import { requireAuthenticatedStaffAction } from "./lib/requireUser";
 const registerStored = makeFunctionReference<"mutation", { ownerId: Id<"users">; storageId: Id<"_storage">; fileName: string }, { id: Id<"crisisAttachments">; fileName: string; contentType: string; size: number }>("crisisAttachments:registerStored");
 const discardStored = makeFunctionReference<"mutation", { storageId: Id<"_storage"> }, { removed: boolean }>("crisisAttachments:discardStored");
 const retainForCleanup = makeFunctionReference<"mutation", { ownerId: Id<"users">; storageId: Id<"_storage">; fileName: string }, { tracked: boolean }>("crisisAttachments:retainForCleanup");
+const publicDownloadRecord = makeFunctionReference<"query", { id: Id<"crisisAttachments"> }, { storageId: Id<"_storage">; fileName: string; contentType: string; size: number } | null>("crisisAttachments:publicDownloadRecord");
 
 function allowedOrigin() {
   const siteUrl = process.env.SITE_URL;
@@ -65,14 +68,17 @@ export const crisisAttachmentUpload = httpAction(async (ctx, request) => {
       contentLength: request.headers.get("Content-Length"),
       contentType: request.headers.get("Content-Type"),
     });
-    const arrayBuffer = await request.arrayBuffer();
-    const validated = validateCrisisAttachmentMetadata({ contentType, size: arrayBuffer.byteLength });
+    fileName = validateCrisisAttachmentFileName(
+      new URL(request.url).searchParams.get("filename") ?? "",
+      contentType,
+    );
+    const bytes = await readStreamWithLimit(request.body);
+    const validated = validateCrisisAttachmentMetadata({ contentType, size: bytes.byteLength });
     if (declaredSize !== null && declaredSize !== validated.size) {
       throw new Error("The uploaded attachment size did not match the request.");
     }
-    validateCrisisAttachmentBytes(new Uint8Array(arrayBuffer), validated.contentType);
-    storageId = await ctx.storage.store(new Blob([arrayBuffer], { type: validated.contentType }));
-    fileName = new URL(request.url).searchParams.get("filename") ?? "Crisis attachment";
+    await validateCrisisAttachmentBytes(bytes, validated.contentType);
+    storageId = await ctx.storage.store(new Blob([bytes], { type: validated.contentType }));
     const attachment = await ctx.runMutation(registerStored, {
       ownerId,
       storageId,
@@ -100,5 +106,37 @@ export const crisisAttachmentUpload = httpAction(async (ctx, request) => {
         : message.includes("origin") || message.includes("authorized") ? 403
           : 400;
     return response(status, { error: message });
+  }
+});
+
+export const crisisAttachmentDownload = httpAction(async (ctx, request) => {
+  try {
+    const rawId = new URL(request.url).searchParams.get("id");
+    if (!rawId) throw new Error("Attachment not found.");
+    const attachment = await ctx.runQuery(publicDownloadRecord, { id: rawId as Id<"crisisAttachments"> });
+    if (!attachment) throw new Error("Attachment not found.");
+    const blob = await ctx.storage.get(attachment.storageId);
+    if (!blob) throw new Error("Attachment not found.");
+    const fallbackName = attachment.fileName.replace(/[^\x20-\x7e]/g, "_").replace(/["\\]/g, "_");
+    return new Response(blob, {
+      status: 200,
+      headers: {
+        "Cache-Control": "private, no-store, max-age=0",
+        "Content-Disposition": `attachment; filename="${fallbackName}"; filename*=UTF-8''${encodeURIComponent(attachment.fileName)}`,
+        "Content-Length": String(blob.size),
+        "Content-Security-Policy": "sandbox",
+        "Content-Type": attachment.contentType,
+        "X-Content-Type-Options": "nosniff",
+      },
+    });
+  } catch {
+    return new Response(JSON.stringify({ error: "Attachment not found." }), {
+      status: 404,
+      headers: {
+        "Cache-Control": "private, no-store, max-age=0",
+        "Content-Type": "application/json; charset=utf-8",
+        "X-Content-Type-Options": "nosniff",
+      },
+    });
   }
 });

@@ -1,4 +1,4 @@
-export type CommitteeSlug = "disec" | "armageddon";
+export type CommitteeSlug = "copuos" | "armageddon";
 export type CrisisChannel = "jcc" | "armageddon";
 
 export type ScenarioMetric = "consensus" | "control" | "legitimacy";
@@ -45,53 +45,52 @@ export type ArmageddonOpeningImpact = {
 };
 
 export const committeeProfiles: Record<CommitteeSlug, CommitteeProfile> = {
-  disec: {
-    slug: "disec",
-    label: "DISEC",
-    fullName: "Disarmament and International Security Committee",
-    format: "General Assembly · Policy and drafting",
-    agenda: "Reforming Disarmament, Demobilization, and Reintegration (DDR) Programs to Tackle the Emergence of Violent Extremist Groups in Post-Conflict Societies",
-    overview: "Negotiate where security ends and durable peace begins. Delegates must connect arms control, reintegration, local legitimacy, and financing in language that rival blocs can still sign.",
-    backgroundGuideUrl: "https://oakridgemun.in/background%20guides_rop/DISEC%20Background%20Guide%20-%20Oakridge%20MUN%202026.pdf",
+  copuos: {
+    slug: "copuos",
+    label: "COPUOS",
+    fullName: "United Nations Committee on the Peaceful Uses of Outer Space",
+    format: "Outer space affairs · Policy and drafting",
+    agenda: "Deliberation on Debris Mitigation in Outer Space, with an Emphasis on New Space Junk",
+    overview: "COPUOS takes debate beyond Earth, covering security, sustainability, and access in the new space age. Delegates must turn a shared orbital hazard into standards that states, agencies, and commercial operators can actually verify and follow.",
+    backgroundGuideUrl: "https://oakridgemun.in/background%20guides_rop/COPUOS%20Background%20Guide%20-%20Oakridge%20MUN%202026.pdf",
     chairs: [
-      { name: "Eswar Chava", role: "Chairperson" },
-      { name: "Ayush Mantri", role: "Vice-Chairperson" },
-      { name: "Anirudh Sai Bhimrao", role: "Rapporteur" },
+      { name: "Dhanush Malhotra", role: "Chairperson" },
+      { name: "Naren Ayinala", role: "Vice-Chairperson" },
     ],
     preparation: [
-      "Separate disarmament, demobilization, and reintegration into measurable policy stages.",
-      "Map which actors finance, monitor, and locally own each stage.",
-      "Prepare safeguards for ex-combatants, communities, and victims of violence.",
+      "Distinguish trackable spacecraft, legacy debris, and newly generated fragments before assigning responsibility.",
+      "Map who detects, shares conjunction warnings, prevents collisions, removes debris, and verifies compliance.",
+      "Draft rules for registration, end-of-life disposal, liability, data access, and equitable use of orbital space.",
     ],
     dilemmas: [
       {
-        id: "ownership",
-        phase: "01 · Mandate",
-        prompt: "Who should own a reformed DDR programme?",
+        id: "tracking",
+        phase: "01 · Detection",
+        prompt: "Who should control the orbital data needed to prevent a collision?",
         options: [
-          { id: "central-command", label: "Central security command", consequence: "Fast authority, weak community trust.", effects: { consensus: -8, control: 24, legitimacy: -13 } },
-          { id: "local-ownership", label: "Local civilian ownership", consequence: "Slower launch, stronger long-term legitimacy.", effects: { consensus: 12, control: -7, legitimacy: 22 } },
-          { id: "hybrid-mission", label: "UN–state hybrid mission", consequence: "Balanced oversight with coordination costs.", effects: { consensus: 18, control: 8, legitimacy: 10 } },
+          { id: "open-ledger", label: "Open international ledger", consequence: "Broad warning access with demanding verification and security safeguards.", effects: { consensus: 20, control: -5, legitimacy: 19 } },
+          { id: "state-clearinghouse", label: "State-run clearinghouse", consequence: "Clear sovereign control but incomplete visibility across blocs.", effects: { consensus: -12, control: 20, legitimacy: -6 } },
+          { id: "operator-compact", label: "Licensed operator compact", consequence: "Fast technical exchange with weak public accountability.", effects: { consensus: 5, control: 16, legitimacy: -10 } },
         ],
       },
       {
-        id: "reintegration",
-        phase: "02 · Reintegration",
-        prompt: "How should former fighters re-enter civilian life?",
+        id: "prevention",
+        phase: "02 · Prevention",
+        prompt: "What should every new mission owe the orbital commons?",
         options: [
-          { id: "blanket-amnesty", label: "Broad amnesty", consequence: "Rapid demobilization, serious accountability risk.", effects: { consensus: -5, control: 15, legitimacy: -24 } },
-          { id: "monitored-amnesty", label: "Monitored conditional amnesty", consequence: "A negotiated bridge between accountability and exit.", effects: { consensus: 17, control: 8, legitimacy: 13 } },
-          { id: "prosecution-first", label: "Prosecution before benefits", consequence: "High accountability, fewer immediate defections.", effects: { consensus: -12, control: -10, legitimacy: 18 } },
+          { id: "binding-end-of-life", label: "Binding end-of-life standard", consequence: "Predictable disposal duties with high enforcement and capacity costs.", effects: { consensus: 13, control: 20, legitimacy: 15 } },
+          { id: "orbital-bond", label: "Refundable orbital-use bond", consequence: "Economic pressure for compliance with difficult equity questions.", effects: { consensus: 2, control: 13, legitimacy: 6 } },
+          { id: "voluntary-practice", label: "Voluntary best practice", consequence: "Quick agreement that may not change high-risk launches.", effects: { consensus: 21, control: -18, legitimacy: -8 } },
         ],
       },
       {
-        id: "finance",
-        phase: "03 · Financing",
-        prompt: "What makes the programme survive after headlines move on?",
+        id: "remediation",
+        phase: "03 · Remediation",
+        prompt: "Who pays when old objects threaten every new mission?",
         options: [
-          { id: "national-budget", label: "National budget mandate", consequence: "Local responsibility under fiscal pressure.", effects: { consensus: 4, control: 17, legitimacy: 9 } },
-          { id: "regional-trust-fund", label: "Regional trust fund", consequence: "Shared risk with stronger external monitoring.", effects: { consensus: 19, control: -3, legitimacy: 14 } },
-          { id: "private-reconstruction", label: "Private reconstruction compact", consequence: "New capital with public-accountability concerns.", effects: { consensus: -4, control: 10, legitimacy: -10 } },
+          { id: "polluter-pays", label: "Launching-state liability", consequence: "Strong responsibility with attribution and historical-equity disputes.", effects: { consensus: -8, control: 18, legitimacy: 17 } },
+          { id: "multilateral-removal", label: "Multilateral removal fund", consequence: "Shared capability and oversight with slower burden negotiations.", effects: { consensus: 22, control: 6, legitimacy: 18 } },
+          { id: "salvage-licenses", label: "Commercial salvage licences", consequence: "Rapid capacity growth with ownership and dual-use risk.", effects: { consensus: -3, control: 15, legitimacy: -11 } },
         ],
       },
     ],

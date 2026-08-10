@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canLinkCrisisAttachment, canManageExperienceRecord, isCrisisAttachmentPublic, nextCrisisUpdateNumber } from "./experienceAccess";
+import { canLinkCrisisAttachment, canManageExperienceRecord, canUseCrisisAttachmentForUpdate, isCrisisAttachmentPublic, nextCrisisUpdateNumber } from "./experienceAccess";
 
 describe("experience authorization", () => {
   it("lets administrators moderate records from any publisher", () => {
@@ -23,11 +23,30 @@ describe("experience authorization", () => {
     expect(canLinkCrisisAttachment("administrator", "admin", "publisher-a", "update-1", "update-2")).toBe(false);
   });
 
-  it("exposes a file only when its published update owns the link and storage URL", () => {
-    expect(isCrisisAttachmentPublic(true, "update-1", "update-1", "https://storage.example/file")).toBe(true);
-    expect(isCrisisAttachmentPublic(false, "update-1", "update-1", "https://storage.example/file")).toBe(false);
-    expect(isCrisisAttachmentPublic(true, "update-1", undefined, "https://storage.example/file")).toBe(false);
-    expect(isCrisisAttachmentPublic(true, "update-1", "update-2", "https://storage.example/file")).toBe(false);
-    expect(isCrisisAttachmentPublic(true, "update-1", "update-1", null)).toBe(false);
+  it("allows an update owner to preserve its existing attachment regardless of who uploaded it", () => {
+    expect(canUseCrisisAttachmentForUpdate({
+      role: "experience_publisher",
+      actorId: "publisher-a",
+      attachmentId: "attachment-1",
+      attachmentOwnerId: "admin",
+      attachmentUpdateId: "update-1",
+      targetUpdateId: "update-1",
+      existingAttachmentId: "attachment-1",
+    })).toBe(true);
+    expect(canUseCrisisAttachmentForUpdate({
+      role: "experience_publisher",
+      actorId: "publisher-a",
+      attachmentId: "attachment-2",
+      attachmentOwnerId: "publisher-b",
+      targetUpdateId: "update-1",
+      existingAttachmentId: "attachment-1",
+    })).toBe(false);
+  });
+
+  it("exposes metadata only when its published update owns the link", () => {
+    expect(isCrisisAttachmentPublic(true, "update-1", "update-1")).toBe(true);
+    expect(isCrisisAttachmentPublic(false, "update-1", "update-1")).toBe(false);
+    expect(isCrisisAttachmentPublic(true, "update-1", undefined)).toBe(false);
+    expect(isCrisisAttachmentPublic(true, "update-1", "update-2")).toBe(false);
   });
 });

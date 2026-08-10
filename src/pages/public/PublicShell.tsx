@@ -4,18 +4,18 @@ import { Radio, ShieldCheck } from "lucide-react";
 import { oakridgeWhiteLogoUrl } from "../../lib/assets";
 
 const publicNavigation = [
-  { to: "/committees/disec", label: "DISEC" },
+  { to: "/committees/copuos", label: "COPUOS" },
   { to: "/committees/armageddon", label: "Armageddon" },
   { to: "/crisis/jcc-cold-war", label: "JCC live" },
   { to: "/crisis/armageddon-ai-takeover", label: "AI crisis" },
 ];
 
-export function PublicShell({ children, variant }: { children: ReactNode; variant: "disec" | "armageddon" | "jcc" }) {
+export function PublicShell({ children, variant }: { children: ReactNode; variant: "disec" | "copuos" | "armageddon" | "jcc" }) {
   return (
     <div className={`public-site public-site--${variant}`}>
       <a className="public-skip-link" href="#delegate-content">Skip to delegate briefing</a>
       <header className="public-header">
-        <Link className="public-brand" to="/committees/disec" aria-label="Oakridge MUN delegate experience">
+        <Link className="public-brand" to="/committees/copuos" aria-label="Oakridge MUN delegate experience">
           <img src={oakridgeWhiteLogoUrl} alt="" />
           <span><strong>OAKRIDGE MUN</strong><small>Delegate experience</small></span>
         </Link>

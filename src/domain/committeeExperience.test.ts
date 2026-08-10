@@ -8,9 +8,11 @@ import {
 } from "./committeeExperience";
 
 describe("committee experience profiles", () => {
-  it("uses the published Oakridge agendas for DISEC and Armageddon", () => {
-    expect(committeeProfiles.disec.agenda).toContain("Disarmament, Demobilization, and Reintegration");
-    expect(committeeProfiles.disec.backgroundGuideUrl).toContain("DISEC%20Background%20Guide");
+  it("uses the published Oakridge agendas for COPUOS and Armageddon", () => {
+    expect(committeeProfiles.copuos.label).toBe("COPUOS");
+    expect(committeeProfiles.copuos.agenda).toContain("Debris Mitigation in Outer Space");
+    expect(committeeProfiles.copuos.backgroundGuideUrl).toContain("COPUOS%20Background%20Guide");
+    expect(committeeProfiles.copuos.chairs.map((chair) => chair.name)).toEqual(["Dhanush Malhotra", "Naren Ayinala"]);
     expect(committeeProfiles.armageddon.agenda).toContain("Artificial Superintelligence");
     expect(committeeProfiles.armageddon.backgroundGuideUrl).toContain("Armageddon%20Background%20Guide");
   });
@@ -48,8 +50,8 @@ describe("delegate preparation simulator", () => {
   });
 
   it("returns a bounded, deterministic outcome from actual option IDs", () => {
-    const first = calculateScenarioOutcome("disec", ["local-ownership", "monitored-amnesty", "regional-trust-fund"]);
-    const second = calculateScenarioOutcome("disec", ["local-ownership", "monitored-amnesty", "regional-trust-fund"]);
+    const first = calculateScenarioOutcome("copuos", ["open-ledger", "binding-end-of-life", "multilateral-removal"]);
+    const second = calculateScenarioOutcome("copuos", ["open-ledger", "binding-end-of-life", "multilateral-removal"]);
     expect(first).toEqual(second);
     expect(first.metrics.consensus).toBeGreaterThanOrEqual(0);
     expect(first.metrics.consensus).toBeLessThanOrEqual(100);
@@ -59,7 +61,7 @@ describe("delegate preparation simulator", () => {
   });
 
   it("ignores option IDs belonging to another committee", () => {
-    const result = calculateScenarioOutcome("armageddon", ["local-ownership"]);
+    const result = calculateScenarioOutcome("armageddon", ["open-ledger"]);
     expect(result.selectedCount).toBe(0);
   });
 });

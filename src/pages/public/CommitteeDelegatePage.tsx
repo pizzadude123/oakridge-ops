@@ -1,7 +1,7 @@
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { useQuery } from "convex/react";
-import { ArrowRight, CalendarDays, Clock3, ExternalLink, FileText, Play, Radio, RotateCcw, Shield, Users } from "lucide-react";
+import { ArrowRight, CalendarDays, CirclePause, CirclePlay, Clock3, ExternalLink, FileText, Play, Radio, RotateCcw, Shield, Users } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
 import { api } from "../../../convex/_generated/api";
@@ -14,6 +14,7 @@ import {
   type ScenarioMetric,
 } from "../../domain/committeeExperience";
 import { PublicShell } from "./PublicShell";
+import { CopuosDelegatePage } from "./CopuosDelegatePage";
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -26,15 +27,12 @@ const metricLabels: Record<ScenarioMetric, string> = {
   legitimacy: "Public legitimacy",
 };
 
-function isCommitteeSlug(value: string | undefined): value is CommitteeSlug {
-  return value === "disec" || value === "armageddon";
-}
-
 export function CommitteeDelegatePage() {
   const { slug } = useParams();
-  if (!isCommitteeSlug(slug)) return <Navigate to="/committees/disec" replace />;
+  if (slug === "disec") return <Navigate to="/committees/copuos" replace />;
+  if (slug === "copuos") return <CopuosDelegatePage />;
   if (slug === "armageddon") return <ArmageddonExperience />;
-  return <CommitteeExperience slug={slug} />;
+  return <Navigate to="/committees/copuos" replace />;
 }
 
 function ArmageddonExperience() {
@@ -43,6 +41,7 @@ function ArmageddonExperience() {
   const root = useRef<HTMLDivElement>(null);
   const handVideoRef = useRef<HTMLVideoElement>(null);
   const openingDilemma = profile.dilemmas[0];
+  const [motionEnabled, setMotionEnabled] = useState(true);
   const [selectedOpeningMoveId, setSelectedOpeningMoveId] = useState<string | null>(null);
   const selectedIds = useMemo(() => selectedOpeningMoveId ? [selectedOpeningMoveId] : [], [selectedOpeningMoveId]);
   const selectedImpact = useMemo(() => armageddonOpeningImpacts.find((impact) => impact.optionId === selectedOpeningMoveId) ?? null, [selectedOpeningMoveId]);
@@ -65,7 +64,8 @@ function ArmageddonExperience() {
     let inViewport = true;
     let documentVisible = !document.hidden;
     const syncVideo = () => {
-      const shouldPlay = !reducedMotion.matches && inViewport && documentVisible;
+      const shouldPlay = motionEnabled && !reducedMotion.matches && inViewport && documentVisible;
+      if (root.current) root.current.dataset.visibility = documentVisible ? "visible" : "hidden";
       if (shouldPlay) void video.play().catch(() => undefined);
       else video.pause();
     };
@@ -91,7 +91,7 @@ function ArmageddonExperience() {
       reducedMotion.removeEventListener("change", handlePreference);
       video.pause();
     };
-  }, []);
+  }, [motionEnabled]);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "auto" });
@@ -104,6 +104,11 @@ function ArmageddonExperience() {
     const mediaQuery = gsap.matchMedia();
     const context = gsap.context(() => {
       mediaQuery.add("(prefers-reduced-motion: no-preference)", () => {
+        if (!motionEnabled) {
+          const hero = root.current?.querySelector<HTMLElement>(".armageddon-hero");
+          if (hero) hero.dataset.motion = "paused";
+          return;
+        }
         const header = document.querySelector<HTMLElement>(".public-site--armageddon .public-header");
         const hero = root.current?.querySelector<HTMLElement>(".armageddon-hero");
         const handMedia = root.current?.querySelector<HTMLElement>(".armageddon-hand-media");
@@ -126,23 +131,23 @@ function ArmageddonExperience() {
           yPercent: 8,
           scale: .98,
           ease: "none",
-          scrollTrigger: { trigger: ".armageddon-hero", start: "top top", end: "bottom top", scrub: 1.1 },
+          scrollTrigger: { trigger: ".armageddon-hero", start: "top top", end: "bottom top", scrub: 1.35, invalidateOnRefresh: true },
         });
         gsap.fromTo(".armageddon-scroll-field", { autoAlpha: 0 }, {
           autoAlpha: .82,
           ease: "none",
-          scrollTrigger: { trigger: ".armageddon-escalation", start: "top 90%", endTrigger: ".armageddon-exit", end: "bottom bottom", scrub: 1.2 },
+          scrollTrigger: { trigger: ".armageddon-escalation", start: "top 90%", endTrigger: ".armageddon-exit", end: "bottom bottom", scrub: 1.5, invalidateOnRefresh: true },
         });
         gsap.to(".armageddon-scroll-system", {
           rotation: 62,
           scale: 1.16,
           ease: "none",
-          scrollTrigger: { trigger: ".armageddon-escalation", start: "top bottom", endTrigger: ".armageddon-exit", end: "bottom bottom", scrub: 1.8 },
+          scrollTrigger: { trigger: ".armageddon-escalation", start: "top bottom", endTrigger: ".armageddon-exit", end: "bottom bottom", scrub: 2.1, invalidateOnRefresh: true },
         });
         gsap.to(".armageddon-scroll-route", {
           strokeDashoffset: -220,
           ease: "none",
-          scrollTrigger: { trigger: ".armageddon-escalation", start: "top bottom", endTrigger: ".armageddon-exit", end: "bottom bottom", scrub: 1.1 },
+          scrollTrigger: { trigger: ".armageddon-escalation", start: "top bottom", endTrigger: ".armageddon-exit", end: "bottom bottom", scrub: 1.45, invalidateOnRefresh: true },
         });
 
         const escalation = gsap.timeline({ scrollTrigger: { trigger: ".armageddon-escalation", start: "top 78%", once: true } });
@@ -153,8 +158,8 @@ function ArmageddonExperience() {
         gsap.fromTo(".armageddon-chair-media", { clipPath: "inset(0 100% 0 0)" }, { clipPath: "inset(0 0% 0 0)", duration: 1.1, ease: "expo.out", scrollTrigger: { trigger: ".armageddon-chair", start: "top 76%", once: true } });
         gsap.from(".armageddon-chair-copy > *", { y: 30, opacity: 0, stagger: .09, duration: .72, ease: "power3.out", scrollTrigger: { trigger: ".armageddon-chair", start: "top 78%", once: true } });
         gsap.from(".armageddon-scenario > header > *, .scenario-disclosure, .armageddon-dilemmas fieldset, .armageddon-outcome", { y: 42, opacity: 0, stagger: .1, duration: .72, ease: "power3.out", scrollTrigger: { trigger: ".armageddon-scenario", start: "top 82%", once: true } });
-        gsap.from(".armageddon-footer-word--outline", { xPercent: -7, ease: "none", scrollTrigger: { trigger: ".armageddon-exit", start: "top bottom", end: "bottom bottom", scrub: 1 } });
-        gsap.from(".armageddon-footer-word--fill", { xPercent: 7, ease: "none", scrollTrigger: { trigger: ".armageddon-exit", start: "top bottom", end: "bottom bottom", scrub: 1 } });
+        gsap.from(".armageddon-footer-word--outline", { xPercent: -7, ease: "none", scrollTrigger: { trigger: ".armageddon-exit", start: "top bottom", end: "bottom bottom", scrub: 1.3, invalidateOnRefresh: true } });
+        gsap.from(".armageddon-footer-word--fill", { xPercent: 7, ease: "none", scrollTrigger: { trigger: ".armageddon-exit", start: "top bottom", end: "bottom bottom", scrub: 1.3, invalidateOnRefresh: true } });
 
         gsap.utils.toArray<HTMLElement>(".armageddon-option").forEach((option) => {
           const wash = option.querySelector<HTMLElement>(".armageddon-option-wash");
@@ -281,16 +286,16 @@ function ArmageddonExperience() {
       });
     }, root);
     return () => { mediaQuery.revert(); context.revert(); };
-  }, []);
+  }, [motionEnabled]);
 
   useLayoutEffect(() => {
-    if (!root.current) return;
+    if (!root.current || !motionEnabled || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const context = gsap.context(() => {
       gsap.fromTo(".armageddon-outcome-polygon", { scale: .82, opacity: .45, transformOrigin: "50% 50%" }, { scale: 1, opacity: 1, duration: .58, ease: "back.out(1.8)" });
       gsap.fromTo(".outcome-metrics em", { scaleX: 0, transformOrigin: "left" }, { scaleX: 1, stagger: .05, duration: .52, ease: "power3.out" });
     }, root);
     return () => context.revert();
-  }, [selectedOpeningMoveId]);
+  }, [motionEnabled, selectedOpeningMoveId]);
 
   function chooseOpeningMove(optionId: string) {
     setSelectedOpeningMoveId(optionId);
@@ -298,7 +303,7 @@ function ArmageddonExperience() {
 
   return (
     <PublicShell variant="armageddon">
-      <div ref={root} className="committee-experience armageddon-experience">
+      <div ref={root} className="committee-experience armageddon-experience" data-motion={motionEnabled ? "running" : "paused"} data-visibility="visible">
         <div className="armageddon-scroll-field" aria-hidden="true">
           <div className="armageddon-scroll-system">
             <svg viewBox="0 0 600 600">
@@ -329,7 +334,12 @@ function ArmageddonExperience() {
 
           <div className="armageddon-hero-top">
             <p className="armageddon-boundary armageddon-liquid-glass"><Shield aria-hidden="true" /> Fictional committee simulation · not a real-world alert</p>
-            <div className="armageddon-hero-system"><span className="armageddon-liquid-glass">{profile.format}</span><span className="armageddon-liquid-glass">AI GOVERNANCE</span><span className="armageddon-liquid-glass">DELEGATE VIEW</span></div>
+            <div className="armageddon-hero-controls">
+              <button className="armageddon-motion-control armageddon-liquid-glass" type="button" aria-pressed={!motionEnabled} onClick={() => setMotionEnabled((current) => !current)}>
+                {motionEnabled ? <CirclePause aria-hidden="true" /> : <CirclePlay aria-hidden="true" />}{motionEnabled ? "Pause motion" : "Resume motion"}
+              </button>
+              <div className="armageddon-hero-system"><span className="armageddon-liquid-glass">{profile.format}</span><span className="armageddon-liquid-glass">AI GOVERNANCE</span><span className="armageddon-liquid-glass">DELEGATE VIEW</span></div>
+            </div>
           </div>
 
           <div className="armageddon-hero-footer">
@@ -471,7 +481,7 @@ function ArmageddonExperience() {
   );
 }
 
-function CommitteeExperience({ slug }: { slug: CommitteeSlug }) {
+export function LegacyCommitteeExperience({ slug }: { slug: CommitteeSlug }) {
   const profile = committeeProfiles[slug];
   const media = useQuery(api.committeeExperience.publicCommitteeMedia, { committee: slug });
   const root = useRef<HTMLDivElement>(null);
@@ -496,7 +506,7 @@ function CommitteeExperience({ slug }: { slug: CommitteeSlug }) {
           .from(".committee-hero .public-kicker", { y: 16, duration: .45 })
           .from(".committee-wordmark span", { yPercent: 24, rotateX: -35, stagger: .045, duration: .7 }, "-=.2")
           .from(".committee-hero-copy > *", { y: 18, stagger: .08, duration: .5 }, "-=.5")
-          .from(".committee-visual", { scale: .92, rotate: slug === "disec" ? -8 : 3, duration: .9 }, "-=.75");
+          .from(".committee-visual", { scale: .92, rotate: slug === "copuos" ? -8 : 3, duration: .9 }, "-=.75");
         gsap.utils.toArray<HTMLElement>(".experience-reveal").forEach((section) => {
           gsap.from(section, {
             y: 42,
@@ -522,7 +532,7 @@ function CommitteeExperience({ slug }: { slug: CommitteeSlug }) {
             <p className="public-kicker"><span /> {profile.format}</p>
             <h1 className="committee-wordmark" aria-label={profile.label}>{profile.label.split("").map((letter, index) => <span aria-hidden="true" key={`${letter}-${index}`}>{letter}</span>)}</h1>
             <p className="committee-full-name">{profile.fullName}</p>
-            <h2>{slug === "disec" ? "Peace is not the absence of weapons." : "Control was the first casualty."}</h2>
+            <h2>{slug === "copuos" ? "Orbit is not empty. It is shared." : "Control was the first casualty."}</h2>
             <p>{profile.overview}</p>
             <div className="committee-hero-actions">
               <a href="#scenario-lab" className="public-button public-button--primary">Enter scenario lab <ArrowRight aria-hidden="true" /></a>
@@ -530,7 +540,7 @@ function CommitteeExperience({ slug }: { slug: CommitteeSlug }) {
             </div>
           </div>
           <div className="committee-visual" aria-hidden="true">
-            {slug === "disec" ? <div className="disec-orbit"><i /><i /><i /><strong>DDR</strong><span>SECURITY</span><span>REINTEGRATION</span><span>TRUST</span></div> : <div className="ai-core"><i /><i /><i /><strong>01</strong><span>CONTROL<br />UNCERTAIN</span><b>GLOBAL SYSTEM / DEGRADED</b></div>}
+            {slug === "copuos" ? <div className="disec-orbit"><i /><i /><i /><strong>ORB</strong><span>TRACKING</span><span>LIABILITY</span><span>ACCESS</span></div> : <div className="ai-core"><i /><i /><i /><strong>01</strong><span>CONTROL<br />UNCERTAIN</span><b>GLOBAL SYSTEM / DEGRADED</b></div>}
           </div>
           <div className="agenda-ticker"><span>AGENDA</span><p>{profile.agenda}</p></div>
         </section>
@@ -549,7 +559,7 @@ function CommitteeExperience({ slug }: { slug: CommitteeSlug }) {
         </section>
 
         <section id="scenario-lab" className="scenario-lab experience-reveal">
-          <header><div><p className="public-kicker">03 · Interactive preparation</p><h2>{slug === "disec" ? "Build a DDR mandate that can survive the vote." : "Choose what remains under human control."}</h2></div><button type="button" onClick={() => setSelections({})}><RotateCcw aria-hidden="true" /> Reset scenario</button></header>
+          <header><div><p className="public-kicker">03 · Interactive preparation</p><h2>{slug === "copuos" ? "Build a debris mandate that survives the launch window." : "Choose what remains under human control."}</h2></div><button type="button" onClick={() => setSelections({})}><RotateCcw aria-hidden="true" /> Reset scenario</button></header>
           <p className="scenario-disclosure"><Shield aria-hidden="true" /> Preparation simulation. These outcomes are deterministic trade-offs, not AI judgment or a prediction of committee results.</p>
           <div className="scenario-grid">
             <div className="dilemma-stack">

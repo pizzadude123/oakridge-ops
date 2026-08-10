@@ -109,7 +109,7 @@ export default defineSchema({
   }).index("by_owner", ["ownerId"]),
   committeeMedia: defineTable({
     ownerId: v.id("users"),
-    committee: v.union(v.literal("disec"), v.literal("armageddon")),
+    committee: v.union(v.literal("disec"), v.literal("copuos"), v.literal("armageddon")),
     title: v.string(),
     speaker: v.string(),
     description: v.string(),
@@ -159,6 +159,7 @@ export default defineSchema({
   })
     .index("by_owner", ["ownerId"])
     .index("by_owner_channel", ["ownerId", "channel"])
+    .index("by_attachment", ["attachmentId"])
     .index("by_channel_published", ["channel", "isPublished", "publishedAt"]),
   allocationRows: defineTable({
     ownerId: v.id("users"),

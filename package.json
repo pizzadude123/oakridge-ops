@@ -27,6 +27,8 @@
     "convex": "latest",
     "date-fns": "latest",
     "dompurify": "latest",
+    "fast-xml-parser": "^5.10.1",
+    "fflate": "^0.8.3",
     "gsap": "^3.15.0",
     "lucide-react": "latest",
     "react": "latest",

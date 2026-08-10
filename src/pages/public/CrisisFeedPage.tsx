@@ -5,13 +5,15 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
 import { api } from "../../../convex/_generated/api";
 import { crisisChannelProfiles, type CrisisChannel } from "../../domain/committeeExperience";
-import { formatCrisisAttachmentSize } from "../../domain/crisisAttachments";
+import { crisisAttachmentDownloadEndpoint, formatCrisisAttachmentSize } from "../../domain/crisisAttachments";
 import { PublicShell } from "./PublicShell";
 
 const routeChannels: Record<string, CrisisChannel> = {
   "jcc-cold-war": "jcc",
   "armageddon-ai-takeover": "armageddon",
 };
+
+const CONVEX_URL = import.meta.env.VITE_CONVEX_URL as string;
 
 function formatTransmissionTime(timestamp?: number) {
   if (!timestamp) return "Publication time unavailable";
@@ -103,7 +105,7 @@ function CrisisConsole({ channel }: { channel: CrisisChannel }) {
               <h2>{activeUpdate.headline}</h2>
               <p className="transmission-body">{activeUpdate.briefing}</p>
               {activeUpdate.affectedPortfolios.length > 0 && <div className="affected-portfolios"><small>Affected portfolios / actors</small><div>{activeUpdate.affectedPortfolios.map((portfolio) => <span key={portfolio}>{portfolio}</span>)}</div></div>}
-              {activeUpdate.attachment && <a className="transmission-attachment" href={activeUpdate.attachment.url} target="_blank" rel="noreferrer"><Paperclip aria-hidden="true" /><span><small>DELEGATE FILE</small><strong>{activeUpdate.attachment.fileName}</strong><b>{formatCrisisAttachmentSize(activeUpdate.attachment.size)} · Open or download</b></span><Download aria-hidden="true" /></a>}
+              {activeUpdate.attachment && <a className="transmission-attachment" href={crisisAttachmentDownloadEndpoint(CONVEX_URL, activeUpdate.attachment.id)}><Paperclip aria-hidden="true" /><span><small>DELEGATE FILE</small><strong>{activeUpdate.attachment.fileName}</strong><b>{formatCrisisAttachmentSize(activeUpdate.attachment.size)} · Download</b></span><Download aria-hidden="true" /></a>}
               {channel === "armageddon" && <div className="transmission-delegate-lens"><small>DELEGATE IMPACT LENS</small><p>What authority changed because of this transmission, who bears the immediate risk, and what verifiable directive should your portfolio move first?</p></div>}
               <footer><Clock3 aria-hidden="true" /><time dateTime={activeUpdate.publishedAt ? new Date(activeUpdate.publishedAt).toISOString() : undefined}>{formatTransmissionTime(activeUpdate.publishedAt)}</time><span>Fictional committee simulation</span></footer>
             </>}

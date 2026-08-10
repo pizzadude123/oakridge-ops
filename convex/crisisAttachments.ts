@@ -1,17 +1,14 @@
 import { v } from "convex/values";
-import { internalMutation, mutation } from "./_generated/server";
-import { canManageExperienceRecord } from "./lib/experienceAccess";
+import { internalMutation, internalQuery, mutation } from "./_generated/server";
+import { canManageExperienceRecord, isCrisisAttachmentPublic } from "./lib/experienceAccess";
 import {
+  deleteStoredAttachmentSafely,
   isUnattachedCrisisAttachmentExpired,
+  validateCrisisAttachmentFileName,
   validateCrisisAttachmentMetadata,
   validateCrisisAttachmentOwnerQuota,
 } from "./lib/crisisAttachments";
 import { requireAuthenticatedStaff } from "./lib/requireUser";
-
-function cleanFileName(value: string) {
-  const clean = value.replace(/[\r\n\t]+/g, " ").replace(/\s+/g, " ").trim();
-  return clean.slice(0, 180) || "Crisis attachment";
-}
 
 export const registerStored = internalMutation({
   args: {
@@ -43,11 +40,22 @@ export const registerStored = internalMutation({
         active.push(attachment);
         continue;
       }
-      await ctx.storage.delete(attachment.storageId).catch(() => undefined);
-      await ctx.db.delete(attachment._id);
+      const reverseReference = await ctx.db
+        .query("crisisUpdates")
+        .withIndex("by_attachment", (query) => query.eq("attachmentId", attachment._id))
+        .first();
+      if (reverseReference) {
+        active.push(attachment);
+        continue;
+      }
+      const deleted = await deleteStoredAttachmentSafely(
+        () => ctx.storage.delete(attachment.storageId),
+        () => ctx.db.delete(attachment._id),
+      );
+      if (!deleted) active.push(attachment);
     }
     validateCrisisAttachmentOwnerQuota(active, validated.size);
-    const fileName = cleanFileName(args.fileName);
+    const fileName = validateCrisisAttachmentFileName(args.fileName, validated.contentType);
     const id = await ctx.db.insert("crisisAttachments", {
       ownerId: args.ownerId,
       storageId: args.storageId,
@@ -95,7 +103,7 @@ export const retainForCleanup = internalMutation({
     await ctx.db.insert("crisisAttachments", {
       ownerId: args.ownerId,
       storageId: args.storageId,
-      fileName: cleanFileName(args.fileName),
+      fileName: validateCrisisAttachmentFileName(args.fileName, validated.contentType),
       contentType: validated.contentType,
       size: validated.size,
       sha256: metadata.sha256,
@@ -114,13 +122,45 @@ export const pruneExpired = internalMutation({
       .withIndex("by_update", (query) => query.eq("updateId", undefined))
       .collect();
     let removed = 0;
+    let failed = 0;
     for (const attachment of unattached) {
       if (!isUnattachedCrisisAttachmentExpired(attachment.createdAt, undefined, now)) continue;
-      await ctx.storage.delete(attachment.storageId).catch(() => undefined);
-      await ctx.db.delete(attachment._id);
-      removed += 1;
+      const reverseReference = await ctx.db
+        .query("crisisUpdates")
+        .withIndex("by_attachment", (query) => query.eq("attachmentId", attachment._id))
+        .first();
+      if (reverseReference) {
+        failed += 1;
+        continue;
+      }
+      const deleted = await deleteStoredAttachmentSafely(
+        () => ctx.storage.delete(attachment.storageId),
+        () => ctx.db.delete(attachment._id),
+      );
+      if (deleted) removed += 1;
+      else failed += 1;
     }
-    return { removed };
+    return { removed, failed };
+  },
+});
+
+export const publicDownloadRecord = internalQuery({
+  args: { id: v.id("crisisAttachments") },
+  handler: async (ctx, args) => {
+    const attachment = await ctx.db.get(args.id);
+    if (!attachment?.updateId) return null;
+    const update = await ctx.db.get(attachment.updateId);
+    if (!update
+      || update.attachmentId !== attachment._id
+      || !isCrisisAttachmentPublic(update.isPublished, String(update._id), String(attachment.updateId))) {
+      return null;
+    }
+    return {
+      storageId: attachment.storageId,
+      fileName: attachment.fileName,
+      contentType: attachment.contentType,
+      size: attachment.size,
+    };
   },
 });
 

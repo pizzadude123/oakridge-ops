@@ -1,9 +1,9 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { canLinkCrisisAttachment, canManageExperienceRecord, isCrisisAttachmentLinked, isCrisisAttachmentPublic, nextCrisisUpdateNumber } from "./lib/experienceAccess";
+import { canManageExperienceRecord, canUseCrisisAttachmentForUpdate, isCrisisAttachmentLinked, isCrisisAttachmentPublic, nextCrisisUpdateNumber } from "./lib/experienceAccess";
 import { requireAuthenticatedStaff } from "./lib/requireUser";
 
-const committee = v.union(v.literal("disec"), v.literal("armageddon"));
+const committee = v.union(v.literal("disec"), v.literal("copuos"), v.literal("armageddon"));
 const channel = v.union(v.literal("jcc"), v.literal("armageddon"));
 const severity = v.union(v.literal("advisory"), v.literal("breaking"), v.literal("critical"));
 const transmission = v.union(v.literal("intelligence"), v.literal("directive"), v.literal("broadcast"));
@@ -60,19 +60,16 @@ export const publicCrisisUpdates = query({
       .take(50);
     return Promise.all(updates.map(async (update) => {
       const stored = update.attachmentId ? await ctx.db.get(update.attachmentId) : null;
-      const url = stored?.updateId === update._id ? await ctx.storage.getUrl(stored.storageId) : null;
-      const attachment = stored && url && isCrisisAttachmentPublic(
+      const attachment = stored && isCrisisAttachmentPublic(
         update.isPublished,
         String(update._id),
         stored.updateId ? String(stored.updateId) : undefined,
-        url,
       )
         ? {
             id: stored._id,
             fileName: stored.fileName,
             contentType: stored.contentType,
             size: stored.size,
-            url,
           }
         : null;
       return {
@@ -171,24 +168,29 @@ export const saveCrisisUpdate = mutation({
     const sourceLabel = requiredText("Source label", args.sourceLabel, 80);
     const affectedPortfolios = [...new Set(args.affectedPortfolios.map((item) => optionalText("Portfolio", item, 60)).filter(Boolean))];
     if (affectedPortfolios.length > 12) throw new Error("Add at most 12 affected portfolios.");
+    const existing = args.updateId ? await ctx.db.get(args.updateId) : null;
+    if (args.updateId && (!existing || !canManageExperienceRecord(staff.role, staff.userId, existing.ownerId))) {
+      throw new Error("Crisis update not found.");
+    }
     const attachment = args.attachmentId ? await ctx.db.get(args.attachmentId) : null;
     if (args.attachmentId && !attachment) {
       throw new Error("Crisis attachment not found.");
     }
-    if (attachment && !canLinkCrisisAttachment(
-      staff.role,
-      String(staff.userId),
-      String(attachment.ownerId),
-      attachment.updateId ? String(attachment.updateId) : undefined,
-      args.updateId ? String(args.updateId) : undefined,
-    )) {
+    if (attachment && !canUseCrisisAttachmentForUpdate({
+      role: staff.role,
+      actorId: String(staff.userId),
+      attachmentId: String(attachment._id),
+      attachmentOwnerId: String(attachment.ownerId),
+      attachmentUpdateId: attachment.updateId ? String(attachment.updateId) : undefined,
+      targetUpdateId: args.updateId ? String(args.updateId) : undefined,
+      existingAttachmentId: existing?.attachmentId ? String(existing.attachmentId) : undefined,
+    })) {
       throw new Error("This attachment is unavailable or already linked to another crisis update.");
     }
     const now = Date.now();
 
     if (args.updateId) {
-      const existing = await ctx.db.get(args.updateId);
-      if (!existing || !canManageExperienceRecord(staff.role, staff.userId, existing.ownerId)) throw new Error("Crisis update not found.");
+      if (!existing) throw new Error("Crisis update not found.");
       let updateNumber = existing.updateNumber;
       if (existing.channel !== args.channel) {
         const targetUpdates = await ctx.db
@@ -215,6 +217,7 @@ export const saveCrisisUpdate = mutation({
       if (existing.attachmentId && existing.attachmentId !== attachment?._id) {
         const replaced = await ctx.db.get(existing.attachmentId);
         if (replaced) {
+          if (replaced.updateId !== existing._id) throw new Error("The existing attachment link is inconsistent. Contact an administrator.");
           await ctx.storage.delete(replaced.storageId);
           await ctx.db.delete(replaced._id);
         }
@@ -272,6 +275,7 @@ export const deleteCrisisUpdate = mutation({
     if (update.attachmentId) {
       const attachment = await ctx.db.get(update.attachmentId);
       if (attachment) {
+        if (attachment.updateId !== update._id) throw new Error("The existing attachment link is inconsistent. Contact an administrator.");
         await ctx.storage.delete(attachment.storageId);
         await ctx.db.delete(attachment._id);
       }

@@ -9,6 +9,7 @@ import { oakridgeLogoUrl } from "./lib/assets";
 import { importLazyRoute } from "./lib/lazyRoute";
 import { workspaceGateState } from "./domain/workspaceGate";
 import "./experience.css";
+import "./copuos.css";
 
 const ContactsPage = lazy(() => importLazyRoute("contacts", () => import("./pages/ContactsPage").then((module) => ({ default: module.ContactsPage }))));
 const DashboardPage = lazy(() => importLazyRoute("dashboard", () => import("./pages/DashboardPage").then((module) => ({ default: module.DashboardPage }))));

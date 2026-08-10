@@ -11,7 +11,7 @@ type SelectedCrisisFile = {
 
 export const CRISIS_ATTACHMENT_ACCEPT = CRISIS_ATTACHMENT_CONTENT_TYPES.join(",");
 
-export function crisisAttachmentUploadEndpoint(deploymentUrl: string, fileName: string) {
+function crisisAttachmentHttpUrl(deploymentUrl: string) {
   const url = new URL(deploymentUrl);
   if (url.hostname.endsWith(".convex.cloud")) {
     url.hostname = `${url.hostname.slice(0, -".convex.cloud".length)}.convex.site`;
@@ -20,9 +20,25 @@ export function crisisAttachmentUploadEndpoint(deploymentUrl: string, fileName: 
   } else {
     throw new Error("The crisis attachment upload endpoint is not configured for this Convex deployment.");
   }
+  return url;
+}
+
+export function crisisAttachmentUploadEndpoint(deploymentUrl: string, fileName: string) {
+  const url = crisisAttachmentHttpUrl(deploymentUrl);
   url.pathname = "/crisis-attachments/upload";
   url.search = new URLSearchParams({ filename: fileName }).toString();
   return url.toString();
+}
+
+export function crisisAttachmentDownloadEndpoint(deploymentUrl: string, attachmentId: string) {
+  const url = crisisAttachmentHttpUrl(deploymentUrl);
+  url.pathname = "/crisis-attachments/download";
+  url.search = new URLSearchParams({ id: attachmentId }).toString();
+  return url.toString();
+}
+
+export function isCurrentCrisisUpload(startedEditorEpoch: number, currentEditorEpoch: number) {
+  return startedEditorEpoch === currentEditorEpoch;
 }
 
 export function validateSelectedCrisisAttachment<T extends SelectedCrisisFile>(file: T) {
