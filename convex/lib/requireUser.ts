@@ -33,3 +33,11 @@ export async function requireAdministratorAction(ctx: GenericActionCtx<DataModel
   if (role !== "administrator") throw new Error("Administrator access is required for operations data.");
   return userId;
 }
+
+export async function requireAuthenticatedStaffAction(ctx: GenericActionCtx<DataModel>, signInMessage: string) {
+  const userId = await getAuthUserId(ctx);
+  if (userId === null) throw new Error(signInMessage);
+  const role = await ctx.runQuery(internal.access.roleForUser, { userId });
+  if (!role) throw new Error("This Oakridge account is not authorized.");
+  return { userId, role };
+}

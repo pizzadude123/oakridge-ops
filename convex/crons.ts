@@ -31,4 +31,11 @@ crons.interval(
   {},
 );
 
+crons.interval(
+  "Remove abandoned crisis attachments every hour",
+  { hours: 1 },
+  internal.crisisAttachments.pruneExpired,
+  {},
+);
+
 export default crons;

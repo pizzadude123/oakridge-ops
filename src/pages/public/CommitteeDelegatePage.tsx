@@ -1,11 +1,12 @@
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { useQuery } from "convex/react";
-import { ArrowRight, CalendarDays, Clock3, ExternalLink, FileText, Pause, Play, Radio, RotateCcw, Shield, Users } from "lucide-react";
+import { ArrowRight, CalendarDays, Clock3, ExternalLink, FileText, Play, Radio, RotateCcw, Shield, Users } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
 import { api } from "../../../convex/_generated/api";
 import {
+  armageddonOpeningImpacts,
   calculateScenarioOutcome,
   committeeProfiles,
   toYouTubeEmbedUrl,
@@ -41,11 +42,10 @@ function ArmageddonExperience() {
   const media = useQuery(api.committeeExperience.publicCommitteeMedia, { committee: "armageddon" });
   const root = useRef<HTMLDivElement>(null);
   const handVideoRef = useRef<HTMLVideoElement>(null);
-  const handUserPaused = useRef(false);
-  const handExplicitPlay = useRef(false);
-  const [handPlaying, setHandPlaying] = useState(false);
-  const [selections, setSelections] = useState<Record<string, string>>({});
-  const selectedIds = useMemo(() => Object.values(selections), [selections]);
+  const openingDilemma = profile.dilemmas[0];
+  const [selectedOpeningMoveId, setSelectedOpeningMoveId] = useState<string | null>(null);
+  const selectedIds = useMemo(() => selectedOpeningMoveId ? [selectedOpeningMoveId] : [], [selectedOpeningMoveId]);
+  const selectedImpact = useMemo(() => armageddonOpeningImpacts.find((impact) => impact.optionId === selectedOpeningMoveId) ?? null, [selectedOpeningMoveId]);
   const outcome = useMemo(() => calculateScenarioOutcome("armageddon", selectedIds), [selectedIds]);
   const embedUrl = media ? toYouTubeEmbedUrl(media.videoUrl) : null;
   const outcomePolygon = useMemo(() => {
@@ -65,9 +65,8 @@ function ArmageddonExperience() {
     let inViewport = true;
     let documentVisible = !document.hidden;
     const syncVideo = () => {
-      const motionAllowed = !reducedMotion.matches || handExplicitPlay.current;
-      const shouldPlay = motionAllowed && inViewport && documentVisible && !handUserPaused.current;
-      if (shouldPlay) void video.play().catch(() => setHandPlaying(false));
+      const shouldPlay = !reducedMotion.matches && inViewport && documentVisible;
+      if (shouldPlay) void video.play().catch(() => undefined);
       else video.pause();
     };
     const observer = new IntersectionObserver(([entry]) => {
@@ -79,23 +78,17 @@ function ArmageddonExperience() {
       syncVideo();
     };
     const handlePreference = () => {
-      if (reducedMotion.matches && !handExplicitPlay.current) video.currentTime = 7;
+      if (reducedMotion.matches) video.currentTime = 7;
       syncVideo();
     };
-    const handlePlay = () => setHandPlaying(true);
-    const handlePause = () => setHandPlaying(false);
     observer.observe(hero);
     document.addEventListener("visibilitychange", handleVisibility);
     reducedMotion.addEventListener("change", handlePreference);
-    video.addEventListener("play", handlePlay);
-    video.addEventListener("pause", handlePause);
     handlePreference();
     return () => {
       observer.disconnect();
       document.removeEventListener("visibilitychange", handleVisibility);
       reducedMotion.removeEventListener("change", handlePreference);
-      video.removeEventListener("play", handlePlay);
-      video.removeEventListener("pause", handlePause);
       video.pause();
     };
   }, []);
@@ -127,14 +120,29 @@ function ArmageddonExperience() {
           .from(".armageddon-hero-line > span", { yPercent: 112, rotateX: -18, filter: "blur(20px)", stagger: .1, duration: .82 }, .56)
           .from(".armageddon-hero-summary", { y: 20, opacity: 0, filter: "blur(20px)", duration: .8 }, .76)
           .from(".armageddon-hero-actions", { y: 16, opacity: 0, filter: "blur(20px)", duration: .8 }, .92)
-          .from(".armageddon-hero-tag", { y: 14, opacity: 0, filter: "blur(16px)", stagger: .08, duration: .58 }, 1.02)
-          .from(".armageddon-hand-control", { scale: .7, opacity: 0, filter: "blur(12px)", duration: .5 }, 1.16);
+          .from(".armageddon-hero-tag", { y: 14, opacity: 0, filter: "blur(16px)", stagger: .08, duration: .58 }, 1.02);
 
         gsap.to(".armageddon-hand-video", {
           yPercent: 8,
           scale: .98,
           ease: "none",
           scrollTrigger: { trigger: ".armageddon-hero", start: "top top", end: "bottom top", scrub: 1.1 },
+        });
+        gsap.fromTo(".armageddon-scroll-field", { autoAlpha: 0 }, {
+          autoAlpha: .82,
+          ease: "none",
+          scrollTrigger: { trigger: ".armageddon-escalation", start: "top 90%", endTrigger: ".armageddon-exit", end: "bottom bottom", scrub: 1.2 },
+        });
+        gsap.to(".armageddon-scroll-system", {
+          rotation: 62,
+          scale: 1.16,
+          ease: "none",
+          scrollTrigger: { trigger: ".armageddon-escalation", start: "top bottom", endTrigger: ".armageddon-exit", end: "bottom bottom", scrub: 1.8 },
+        });
+        gsap.to(".armageddon-scroll-route", {
+          strokeDashoffset: -220,
+          ease: "none",
+          scrollTrigger: { trigger: ".armageddon-escalation", start: "top bottom", endTrigger: ".armageddon-exit", end: "bottom bottom", scrub: 1.1 },
         });
 
         const escalation = gsap.timeline({ scrollTrigger: { trigger: ".armageddon-escalation", start: "top 78%", once: true } });
@@ -167,6 +175,8 @@ function ArmageddonExperience() {
           option.addEventListener("blur", blur);
           option.addEventListener("pointerdown", press);
           option.addEventListener("pointerup", release);
+          option.addEventListener("pointercancel", release);
+          option.addEventListener("lostpointercapture", release);
           listenerCleanup.push(() => {
             option.removeEventListener("pointerenter", enter);
             option.removeEventListener("pointerleave", leave);
@@ -174,6 +184,8 @@ function ArmageddonExperience() {
             option.removeEventListener("blur", blur);
             option.removeEventListener("pointerdown", press);
             option.removeEventListener("pointerup", release);
+            option.removeEventListener("pointercancel", release);
+            option.removeEventListener("lostpointercapture", release);
             gsap.killTweensOf([option, wash]);
           });
         });
@@ -278,28 +290,32 @@ function ArmageddonExperience() {
       gsap.fromTo(".outcome-metrics em", { scaleX: 0, transformOrigin: "left" }, { scaleX: 1, stagger: .05, duration: .52, ease: "power3.out" });
     }, root);
     return () => context.revert();
-  }, [selections]);
+  }, [selectedOpeningMoveId]);
 
-  function toggleHandMotion() {
-    const video = handVideoRef.current;
-    if (!video) return;
-    if (video.paused) {
-      handUserPaused.current = false;
-      handExplicitPlay.current = true;
-      void video.play().catch(() => setHandPlaying(false));
-    } else {
-      handUserPaused.current = true;
-      video.pause();
-    }
-  }
-
-  function choose(dilemmaId: string, optionId: string) {
-    setSelections((current) => ({ ...current, [dilemmaId]: optionId }));
+  function chooseOpeningMove(optionId: string) {
+    setSelectedOpeningMoveId(optionId);
   }
 
   return (
     <PublicShell variant="armageddon">
       <div ref={root} className="committee-experience armageddon-experience">
+        <div className="armageddon-scroll-field" aria-hidden="true">
+          <div className="armageddon-scroll-system">
+            <svg viewBox="0 0 600 600">
+              <circle className="armageddon-scroll-ring" cx="300" cy="300" r="244" />
+              <circle className="armageddon-scroll-ring armageddon-scroll-ring--inner" cx="300" cy="300" r="154" />
+              <path className="armageddon-scroll-axis" d="M300 56V544M56 420L544 420M92 474L508 126" />
+              <path className="armageddon-scroll-route" d="M300 72L526 462L74 462Z" />
+              <circle className="armageddon-scroll-node" cx="300" cy="72" r="9" />
+              <circle className="armageddon-scroll-node" cx="526" cy="462" r="9" />
+              <circle className="armageddon-scroll-node" cx="74" cy="462" r="9" />
+            </svg>
+            <span className="armageddon-scroll-label armageddon-scroll-label--control">CONTROL</span>
+            <span className="armageddon-scroll-label armageddon-scroll-label--consensus">CONSENSUS</span>
+            <span className="armageddon-scroll-label armageddon-scroll-label--legitimacy">LEGITIMACY</span>
+            <small>HUMAN AUTHORITY / IMPACT FIELD</small>
+          </div>
+        </div>
         <section className="armageddon-hero" aria-labelledby="armageddon-title" data-motion="paused">
           <div className="armageddon-hand-media" aria-hidden="true">
             <video ref={handVideoRef} className="armageddon-hand-video" autoPlay muted loop playsInline preload="metadata" poster={armageddonHandPoster}>
@@ -323,17 +339,17 @@ function ArmageddonExperience() {
                 <span><Clock3 aria-hidden="true" /> Continuous committee</span>
                 <span><CalendarDays aria-hidden="true" /> 2026 simulation</span>
               </div>
-              <p className="armageddon-hero-status"><i /> ARMAGEDDON · {profile.fullName}</p>
+              <p className="armageddon-hero-status"><i /> ARMAGEDDON COMMITTEE · {profile.fullName}</p>
               <h1 id="armageddon-title" aria-label={`${profile.label}: Human authority at machine speed.`}>
                 <span className="armageddon-hero-line"><span>Human authority.</span></span>
                 <span className="armageddon-hero-line"><span>At machine speed.</span></span>
               </h1>
-              <p className="armageddon-hero-summary">The system is already inside the loop. Build directives that preserve evidence, legitimate authority, and a way back to human control.</p>
+              <p className="armageddon-hero-summary">Armageddon is Oakridge MUN’s speculative AI crisis committee about what governments do when artificial superintelligence outpaces normal law, evidence, and command.</p>
               <div className="armageddon-hero-actions">
                 <button type="button" data-magnetic onClick={() => {
                   document.getElementById("scenario-lab")?.scrollIntoView({ block: "start" });
                   document.getElementById("armageddon-scenario-title")?.focus({ preventScroll: true });
-                }} className="armageddon-action armageddon-action--primary"><span data-magnetic-inner>Enter decision matrix <ArrowRight aria-hidden="true" /></span></button>
+                }} className="armageddon-action armageddon-action--primary"><span data-magnetic-inner>Explore three opening moves <ArrowRight aria-hidden="true" /></span></button>
                 <a href={profile.backgroundGuideUrl} target="_blank" rel="noreferrer" data-magnetic className="armageddon-action armageddon-liquid-glass"><span data-magnetic-inner><FileText aria-hidden="true" /> Open background guide</span></a>
               </div>
             </div>
@@ -341,18 +357,15 @@ function ArmageddonExperience() {
               <div className="armageddon-hero-tags" aria-label="Committee themes">
                 {["Neuromorphic power", "AGI governance", "Human failsafes"].map((tag) => <span className="armageddon-hero-tag armageddon-liquid-glass" key={tag}>{tag}</span>)}
               </div>
-              <button type="button" className="armageddon-hand-control armageddon-liquid-glass" onClick={toggleHandMotion} aria-pressed={handPlaying} aria-label={handPlaying ? "Pause cinematic background" : "Play cinematic background"}>
-                {handPlaying ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}<span>{handPlaying ? "Pause film" : "Play film"}</span>
-              </button>
             </div>
           </div>
         </section>
 
         <section className="armageddon-escalation" aria-labelledby="armageddon-preparation-title">
           <div className="armageddon-escalation-copy">
-            <p className="public-kicker">01 · Before committee</p>
-            <h2 id="armageddon-preparation-title">Prepare a chain of command, not a pile of research.</h2>
-            <p>The room rewards delegates who can identify evidence, assign authority, and verify action while the premise changes around them.</p>
+            <p className="public-kicker">01 · Committee mandate</p>
+            <h2 id="armageddon-preparation-title">Armageddon begins after control is uncertain.</h2>
+            <p>This is a continuous crisis committee. Delegates answer Executive Board-authored developments by negotiating emergency authority, protecting infrastructure, and writing directives whose consequences return to the room.</p>
           </div>
           <ol>
             {profile.preparation.map((item, index) => <li className="armageddon-brief-step" key={item}><span>0{index + 1}</span><div><small>{["Detect", "Authorize", "Verify"][index]}</small><p>{item}</p></div></li>)}
@@ -377,38 +390,62 @@ function ArmageddonExperience() {
 
         <section id="scenario-lab" className="armageddon-scenario" aria-labelledby="armageddon-scenario-title">
           <header>
-            <div><p className="public-kicker">03 · Decision matrix</p><h2 id="armageddon-scenario-title" tabIndex={-1}>Choose what remains under human control.</h2></div>
-            <button type="button" onClick={() => setSelections({})}><RotateCcw aria-hidden="true" /> Reset all decisions</button>
+            <div><p className="public-kicker">03 · Opening decision</p><h2 id="armageddon-scenario-title" tabIndex={-1}>Three ways the crisis begins.</h2></div>
+            <button type="button" onClick={() => setSelectedOpeningMoveId(null)}><RotateCcw aria-hidden="true" /> Reset impact branch</button>
           </header>
-          <p className="scenario-disclosure"><Shield aria-hidden="true" /> Preparation simulation. Outcomes are deterministic trade-offs—not AI judgment or predictions of committee results.</p>
+          <p className="scenario-disclosure"><Shield aria-hidden="true" /> Choose the first directive your portfolio would support. Each branch is a fictional, deterministic trade-off—not AI judgment or a prediction of committee results.</p>
           <div className="armageddon-scenario-grid">
             <div className="armageddon-dilemmas">
-              {profile.dilemmas.map((dilemma, dilemmaIndex) => <fieldset key={dilemma.id}>
-                <legend><span>{dilemma.phase}</span>{dilemma.prompt}</legend>
-                <div>{dilemma.options.map((option, optionIndex) => {
-                  const selected = selections[dilemma.id] === option.id;
-                  return <button key={option.id} type="button" className={`armageddon-option${selected ? " is-selected" : ""}`} data-selected={selected || undefined} aria-pressed={selected} onClick={() => choose(dilemma.id, option.id)}><span className="armageddon-option-wash" aria-hidden="true" /><span className="armageddon-option-index">{dilemmaIndex + 1}.{optionIndex + 1}</span><strong>{option.label}</strong><small>{option.consequence}</small><i aria-hidden="true" /></button>;
+              <fieldset className="armageddon-opening-fieldset">
+                <legend><span>{openingDilemma.phase}</span>{openingDilemma.prompt}</legend>
+                <div className="armageddon-opening-options">{openingDilemma.options.map((option, optionIndex) => {
+                  const selected = selectedOpeningMoveId === option.id;
+                  const impact = armageddonOpeningImpacts.find((candidate) => candidate.optionId === option.id);
+                  return <button key={option.id} type="button" className={`armageddon-option armageddon-opening-option${selected ? " is-selected" : ""}`} data-selected={selected || undefined} aria-pressed={selected} onClick={() => chooseOpeningMove(option.id)}>
+                    <span className="armageddon-option-wash" aria-hidden="true" />
+                    <span className="armageddon-option-index">0{optionIndex + 1}</span>
+                    <small className="armageddon-option-doctrine">{impact?.doctrine}</small>
+                    <strong>{option.label}</strong>
+                    <p>{option.consequence}</p>
+                    <span className="armageddon-impact-preview" aria-label={`${option.label} impact preview`}>
+                      {(Object.entries(option.effects) as Array<[ScenarioMetric, number]>).map(([metric, value]) => <span className="armageddon-impact-chip" key={metric}><small>{metricLabels[metric]}</small><b>{value > 0 ? "+" : ""}{value}</b></span>)}
+                    </span>
+                    <span className="armageddon-option-trace">Trace this branch <ArrowRight aria-hidden="true" /></span>
+                    <i aria-hidden="true" />
+                  </button>;
                 })}</div>
-              </fieldset>)}
+              </fieldset>
             </div>
 
-            <aside className="armageddon-outcome" aria-live="polite" data-decisions={outcome.selectedCount}>
-              <div className="outcome-signal"><Radio aria-hidden="true" /><span>{outcome.selectedCount}/3 decisions locked</span></div>
-              <div className="armageddon-outcome-map" aria-hidden="true">
-                <svg viewBox="0 0 160 160">
-                  <polygon className="armageddon-outcome-guide" points="80,13 138,113 22,113" />
-                  <path d="M80 80V13M80 80L138 113M80 80L22 113" />
-                  <polygon className="armageddon-outcome-polygon" points={outcomePolygon} />
-                  <circle cx="80" cy="80" r="3" />
-                </svg>
-                <span className="armageddon-axis armageddon-axis--control">Control</span>
-                <span className="armageddon-axis armageddon-axis--consensus">Consensus</span>
-                <span className="armageddon-axis armageddon-axis--legitimacy">Legitimacy</span>
+            <aside className="armageddon-outcome armageddon-impact-panel" aria-live="polite" aria-atomic="true" data-decisions={outcome.selectedCount}>
+              <div className="armageddon-impact-trajectory">
+                <div className="outcome-signal"><Radio aria-hidden="true" /><span>{selectedImpact ? "OPENING MOVE LOCKED" : "AWAITING DIRECTIVE"}</span></div>
+                <h3>{selectedImpact ? openingDilemma.options.find((option) => option.id === selectedImpact.optionId)?.label : "Impact trajectory"}</h3>
+                <p className="armageddon-impact-summary">{selectedImpact?.summary || "Select one opening move to trace what changes immediately, what cascades during the first hour, and what delegates must resolve in committee."}</p>
+                {selectedImpact ? <>
+                  <ol className="armageddon-impact-timeline">
+                    {selectedImpact.timeline.map((step, index) => <li className="armageddon-impact-step" key={step.horizon}><span>0{index + 1}</span><div><small>{step.horizon}</small><strong>{step.title}</strong><p>{step.detail}</p></div></li>)}
+                  </ol>
+                  <div className="armageddon-delegate-pressure"><small>DELEGATE PRESSURE</small><p>{selectedImpact.delegatePressure}</p><blockquote>{selectedImpact.debateQuestion}</blockquote></div>
+                  <div className="armageddon-affected-actors"><small>AFFECTED ACTORS</small><div>{selectedImpact.affectedActors.map((actor) => <span key={actor}>{actor}</span>)}</div></div>
+                </> : <div className="armageddon-impact-empty" aria-hidden="true"><span>01</span><span>02</span><span>03</span></div>}
               </div>
-              <h3>Strategic consequence</h3>
-              <p>{outcome.assessment}</p>
-              <div className="outcome-metrics">{(Object.entries(outcome.metrics) as Array<[ScenarioMetric, number]>).map(([metric, value]) => <div key={metric}><span><b>{metricLabels[metric]}</b><strong>{value}</strong></span><i><em style={{ width: `${value}%` }} /></i></div>)}</div>
-              <small>Use the weakest dimension as your next caucus question—not as a score to maximize blindly.</small>
+              <div className="armageddon-impact-scorecard">
+                <div className="armageddon-outcome-map" aria-hidden="true">
+                  <svg viewBox="0 0 160 160">
+                    <polygon className="armageddon-outcome-guide" points="80,13 138,113 22,113" />
+                    <path d="M80 80V13M80 80L138 113M80 80L22 113" />
+                    <polygon className="armageddon-outcome-polygon" points={outcomePolygon} />
+                    <circle cx="80" cy="80" r="3" />
+                  </svg>
+                  <span className="armageddon-axis armageddon-axis--control">Control</span>
+                  <span className="armageddon-axis armageddon-axis--consensus">Consensus</span>
+                  <span className="armageddon-axis armageddon-axis--legitimacy">Legitimacy</span>
+                </div>
+                <h4>Delegate impact profile</h4>
+                <div className="outcome-metrics">{(Object.entries(outcome.metrics) as Array<[ScenarioMetric, number]>).map(([metric, value]) => <div key={metric}><span><b>{metricLabels[metric]}</b><strong>{value}</strong></span><i><em style={{ width: `${value}%` }} /></i></div>)}</div>
+                <small>These values expose pressure points for debate; they are not a score or a claim about real-world outcomes.</small>
+              </div>
             </aside>
           </div>
         </section>

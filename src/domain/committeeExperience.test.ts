@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  armageddonOpeningImpacts,
   calculateScenarioOutcome,
   committeeProfiles,
   crisisChannelProfiles,
@@ -34,6 +35,18 @@ describe("chair explainer URLs", () => {
 });
 
 describe("delegate preparation simulator", () => {
+  it("defines three Armageddon opening moves with immediate, cascading, and delegate impacts", () => {
+    const openingOptionIds = committeeProfiles.armageddon.dilemmas[0].options.map((option) => option.id);
+    expect(armageddonOpeningImpacts.map((impact) => impact.optionId)).toEqual(openingOptionIds);
+    expect(armageddonOpeningImpacts).toHaveLength(3);
+    for (const impact of armageddonOpeningImpacts) {
+      expect(impact.timeline).toHaveLength(3);
+      expect(impact.timeline.map((step) => step.horizon)).toEqual(["IMMEDIATE", "FIRST HOUR", "IN COMMITTEE"]);
+      expect(impact.delegatePressure.length).toBeGreaterThan(40);
+      expect(impact.debateQuestion.endsWith("?")).toBe(true);
+    }
+  });
+
   it("returns a bounded, deterministic outcome from actual option IDs", () => {
     const first = calculateScenarioOutcome("disec", ["local-ownership", "monitored-amnesty", "regional-trust-fund"]);
     const second = calculateScenarioOutcome("disec", ["local-ownership", "monitored-amnesty", "regional-trust-fund"]);

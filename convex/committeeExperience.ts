@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { canManageExperienceRecord, nextCrisisUpdateNumber } from "./lib/experienceAccess";
+import { canLinkCrisisAttachment, canManageExperienceRecord, isCrisisAttachmentLinked, isCrisisAttachmentPublic, nextCrisisUpdateNumber } from "./lib/experienceAccess";
 import { requireAuthenticatedStaff } from "./lib/requireUser";
 
 const committee = v.union(v.literal("disec"), v.literal("armageddon"));
@@ -58,17 +58,36 @@ export const publicCrisisUpdates = query({
       .withIndex("by_channel_published", (q) => q.eq("channel", args.channel).eq("isPublished", true))
       .order("desc")
       .take(50);
-    return updates.map((update) => ({
-      _id: update._id,
-      channel: update.channel,
-      updateNumber: update.updateNumber,
-      headline: update.headline,
-      briefing: update.briefing,
-      severity: update.severity,
-      transmission: update.transmission,
-      sourceLabel: update.sourceLabel,
-      affectedPortfolios: update.affectedPortfolios,
-      publishedAt: update.publishedAt,
+    return Promise.all(updates.map(async (update) => {
+      const stored = update.attachmentId ? await ctx.db.get(update.attachmentId) : null;
+      const url = stored?.updateId === update._id ? await ctx.storage.getUrl(stored.storageId) : null;
+      const attachment = stored && url && isCrisisAttachmentPublic(
+        update.isPublished,
+        String(update._id),
+        stored.updateId ? String(stored.updateId) : undefined,
+        url,
+      )
+        ? {
+            id: stored._id,
+            fileName: stored.fileName,
+            contentType: stored.contentType,
+            size: stored.size,
+            url,
+          }
+        : null;
+      return {
+        _id: update._id,
+        channel: update.channel,
+        updateNumber: update.updateNumber,
+        headline: update.headline,
+        briefing: update.briefing,
+        severity: update.severity,
+        transmission: update.transmission,
+        sourceLabel: update.sourceLabel,
+        affectedPortfolios: update.affectedPortfolios,
+        attachment,
+        publishedAt: update.publishedAt,
+      };
     }));
   },
 });
@@ -81,7 +100,23 @@ export const adminExperience = query({
     const updates = staff.role === "administrator"
       ? await ctx.db.query("crisisUpdates").order("desc").collect()
       : await ctx.db.query("crisisUpdates").withIndex("by_owner", (q) => q.eq("ownerId", staff.userId)).order("desc").collect();
-    return { media, updates };
+    const hydratedUpdates = await Promise.all(updates.map(async (update) => {
+      const stored = update.attachmentId ? await ctx.db.get(update.attachmentId) : null;
+      const url = stored && isCrisisAttachmentLinked(String(update._id), stored.updateId ? String(stored.updateId) : undefined)
+        ? await ctx.storage.getUrl(stored.storageId)
+        : null;
+      const attachment = stored && url
+        ? {
+            id: stored._id,
+            fileName: stored.fileName,
+            contentType: stored.contentType,
+            size: stored.size,
+            url,
+          }
+        : null;
+      return { ...update, attachment };
+    }));
+    return { media, updates: hydratedUpdates };
   },
 });
 
@@ -126,6 +161,7 @@ export const saveCrisisUpdate = mutation({
     transmission,
     sourceLabel: v.string(),
     affectedPortfolios: v.array(v.string()),
+    attachmentId: v.optional(v.id("crisisAttachments")),
     isPublished: v.boolean(),
   },
   handler: async (ctx, args) => {
@@ -135,6 +171,19 @@ export const saveCrisisUpdate = mutation({
     const sourceLabel = requiredText("Source label", args.sourceLabel, 80);
     const affectedPortfolios = [...new Set(args.affectedPortfolios.map((item) => optionalText("Portfolio", item, 60)).filter(Boolean))];
     if (affectedPortfolios.length > 12) throw new Error("Add at most 12 affected portfolios.");
+    const attachment = args.attachmentId ? await ctx.db.get(args.attachmentId) : null;
+    if (args.attachmentId && !attachment) {
+      throw new Error("Crisis attachment not found.");
+    }
+    if (attachment && !canLinkCrisisAttachment(
+      staff.role,
+      String(staff.userId),
+      String(attachment.ownerId),
+      attachment.updateId ? String(attachment.updateId) : undefined,
+      args.updateId ? String(args.updateId) : undefined,
+    )) {
+      throw new Error("This attachment is unavailable or already linked to another crisis update.");
+    }
     const now = Date.now();
 
     if (args.updateId) {
@@ -157,10 +206,19 @@ export const saveCrisisUpdate = mutation({
         transmission: args.transmission,
         sourceLabel,
         affectedPortfolios,
+        attachmentId: attachment?._id,
         isPublished: args.isPublished,
         publishedAt: args.isPublished ? existing.publishedAt ?? now : undefined,
         updatedAt: now,
       });
+      if (attachment && attachment.updateId !== existing._id) await ctx.db.patch(attachment._id, { updateId: existing._id });
+      if (existing.attachmentId && existing.attachmentId !== attachment?._id) {
+        const replaced = await ctx.db.get(existing.attachmentId);
+        if (replaced) {
+          await ctx.storage.delete(replaced.storageId);
+          await ctx.db.delete(replaced._id);
+        }
+      }
       return { updateId: existing._id, updateNumber };
     }
 
@@ -179,11 +237,13 @@ export const saveCrisisUpdate = mutation({
       transmission: args.transmission,
       sourceLabel,
       affectedPortfolios,
+      attachmentId: attachment?._id,
       isPublished: args.isPublished,
       publishedAt: args.isPublished ? now : undefined,
       createdAt: now,
       updatedAt: now,
     });
+    if (attachment) await ctx.db.patch(attachment._id, { updateId });
     return { updateId, updateNumber };
   },
 });
@@ -209,6 +269,13 @@ export const deleteCrisisUpdate = mutation({
     const staff = await requireAuthenticatedStaff(ctx);
     const update = await ctx.db.get(args.updateId);
     if (!update || !canManageExperienceRecord(staff.role, staff.userId, update.ownerId)) throw new Error("Crisis update not found.");
+    if (update.attachmentId) {
+      const attachment = await ctx.db.get(update.attachmentId);
+      if (attachment) {
+        await ctx.storage.delete(attachment.storageId);
+        await ctx.db.delete(attachment._id);
+      }
+    }
     await ctx.db.delete(update._id);
     return { deleted: true };
   },

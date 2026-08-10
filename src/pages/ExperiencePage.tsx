@@ -1,11 +1,17 @@
+import { useConvexAuth } from "@convex-dev/auth/react";
 import { useMutation, useQuery } from "convex/react";
-import { Check, Copy, ExternalLink, Film, Pencil, Radio, Send, Trash2, UsersRound } from "lucide-react";
-import { useState, type FormEvent } from "react";
+import { makeFunctionReference } from "convex/server";
+import { Check, Copy, ExternalLink, FileUp, Film, Paperclip, Pencil, Radio, Send, Trash2, UsersRound, X } from "lucide-react";
+import { useRef, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { PageHeader } from "../components/PageHeader";
 import { committeeProfiles, crisisChannelProfiles, toYouTubeEmbedUrl, type CommitteeSlug, type CrisisChannel } from "../domain/committeeExperience";
+import { CRISIS_ATTACHMENT_ACCEPT, crisisAttachmentUploadEndpoint, formatCrisisAttachmentSize, validateSelectedCrisisAttachment } from "../domain/crisisAttachments";
+
+const CONVEX_URL = import.meta.env.VITE_CONVEX_URL as string;
+const removeCrisisAttachment = makeFunctionReference<"mutation", { id: Id<"crisisAttachments"> }, { removed: boolean }>("crisisAttachments:remove");
 
 type MediaRecord = {
   _id: Id<"committeeMedia">;
@@ -26,7 +32,17 @@ type EditorState = {
   transmission: "intelligence" | "directive" | "broadcast";
   sourceLabel: string;
   portfolios: string;
+  attachment: CrisisAttachment | null;
   isPublished: boolean;
+};
+
+type CrisisAttachment = {
+  id: Id<"crisisAttachments">;
+  url: string;
+  fileName: string;
+  contentType: string;
+  size: number;
+  persisted: boolean;
 };
 
 const emptyEditor: EditorState = {
@@ -37,6 +53,7 @@ const emptyEditor: EditorState = {
   transmission: "intelligence",
   sourceLabel: "Crisis Directorate",
   portfolios: "",
+  attachment: null,
   isPublished: false,
 };
 
@@ -86,12 +103,16 @@ function MediaEditor({ committee, stored }: { committee: CommitteeSlug; stored?:
 }
 
 export function ExperiencePage() {
+  const { fetchAccessToken } = useConvexAuth();
   const experience = useQuery(api.committeeExperience.adminExperience);
   const saveUpdate = useMutation(api.committeeExperience.saveCrisisUpdate);
   const setPublished = useMutation(api.committeeExperience.setCrisisPublished);
   const deleteUpdate = useMutation(api.committeeExperience.deleteCrisisUpdate);
+  const discardAttachment = useMutation(removeCrisisAttachment);
+  const attachmentInput = useRef<HTMLInputElement>(null);
   const [editor, setEditor] = useState<EditorState>(emptyEditor);
   const [busy, setBusy] = useState(false);
+  const [attachmentBusy, setAttachmentBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [copied, setCopied] = useState("");
@@ -99,6 +120,68 @@ export function ExperiencePage() {
 
   function change<K extends keyof EditorState>(key: K, value: EditorState[K]) {
     setEditor((current) => ({ ...current, [key]: value }));
+  }
+
+  async function uploadAttachment(file: File) {
+    setMessage(""); setError("");
+    try {
+      validateSelectedCrisisAttachment(file);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "That file cannot be attached.");
+      return;
+    }
+    setAttachmentBusy(true);
+    try {
+      if (editor.attachment && !editor.attachment.persisted) {
+        await discardAttachment({ id: editor.attachment.id });
+        setEditor((current) => current.attachment?.id === editor.attachment?.id ? { ...current, attachment: null } : current);
+      }
+      const authToken = await fetchAccessToken({ forceRefreshToken: false });
+      if (!authToken) throw new Error("Sign in before uploading crisis attachments.");
+      const response = await fetch(crisisAttachmentUploadEndpoint(CONVEX_URL, file.name), {
+        method: "POST",
+        headers: { Authorization: `Bearer ${authToken}`, "Content-Type": file.type },
+        body: file,
+      });
+      const result = await response.json() as Partial<Omit<CrisisAttachment, "persisted">> & { error?: string };
+      if (!response.ok || !result.id || !result.url || !result.fileName || !result.contentType || !result.size) {
+        throw new Error(result.error || `${file.name} could not be uploaded.`);
+      }
+      setEditor((current) => ({ ...current, attachment: {
+        id: result.id as Id<"crisisAttachments">,
+        url: result.url!,
+        fileName: result.fileName!,
+        contentType: result.contentType!,
+        size: result.size!,
+        persisted: false,
+      } }));
+      setMessage(`${result.fileName} is ready to publish with this transmission.`);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "The crisis attachment could not be uploaded.");
+    } finally {
+      setAttachmentBusy(false);
+      if (attachmentInput.current) attachmentInput.current.value = "";
+    }
+  }
+
+  async function removeEditorAttachment() {
+    const attachment = editor.attachment;
+    if (!attachment) return;
+    setAttachmentBusy(true); setMessage(""); setError("");
+    try {
+      if (!attachment.persisted) await discardAttachment({ id: attachment.id });
+      setEditor((current) => current.attachment?.id === attachment.id ? { ...current, attachment: null } : current);
+      setMessage(attachment.persisted ? "The attachment will be removed when you save this update." : "The attachment was removed.");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "The attachment could not be removed.");
+    } finally { setAttachmentBusy(false); }
+  }
+
+  async function cancelEdit() {
+    const attachment = editor.attachment;
+    if (attachment && !attachment.persisted) await discardAttachment({ id: attachment.id }).catch(() => undefined);
+    setEditor({ ...emptyEditor, channel: editor.channel });
+    setMessage(""); setError("");
   }
 
   async function submitUpdate(event: FormEvent) {
@@ -114,6 +197,7 @@ export function ExperiencePage() {
         transmission: editor.transmission,
         sourceLabel: editor.sourceLabel,
         affectedPortfolios: editor.portfolios.split(",").map((item) => item.trim()).filter(Boolean),
+        attachmentId: editor.attachment?.id,
         isPublished: editor.isPublished,
       });
       setMessage(`Update ${String(result.updateNumber).padStart(2, "0")} ${editor.isPublished ? "published" : "saved as a draft"}.`);
@@ -133,6 +217,7 @@ export function ExperiencePage() {
       transmission: update.transmission,
       sourceLabel: update.sourceLabel,
       portfolios: update.affectedPortfolios.join(", "),
+      attachment: update.attachment ? { ...update.attachment, persisted: true } : null,
       isPublished: update.isPublished,
     });
     document.querySelector(".crisis-editor")?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -177,20 +262,25 @@ export function ExperiencePage() {
             <label className="field-span"><span>Headline</span><input value={editor.headline} onChange={(event) => change("headline", event.target.value)} maxLength={140} placeholder="A development delegates must respond to" required /></label>
             <label className="field-span"><span>Full briefing</span><textarea value={editor.briefing} onChange={(event) => change("briefing", event.target.value)} maxLength={2400} rows={9} placeholder="State what happened, what is confirmed, and what changed. Do not prescribe the delegate response." required /></label>
             <label className="field-span"><span>Affected portfolios or actors</span><input value={editor.portfolios} onChange={(event) => change("portfolios", event.target.value)} placeholder="United States, Soviet Union, Emergency Council" /><small>Comma-separated, maximum 12.</small></label>
+            <div className="field-span crisis-attachment-field">
+              <div><span>Delegate attachment</span><small>Optional · one PDF, DOCX, XLSX, CSV, PNG, or JPEG file · 10 MB maximum</small></div>
+              <input ref={attachmentInput} className="sr-only" type="file" accept={CRISIS_ATTACHMENT_ACCEPT} aria-label="Upload a crisis transmission attachment" onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadAttachment(file); }} />
+              {editor.attachment ? <div className="crisis-attachment-selected"><Paperclip aria-hidden="true" /><div><strong>{editor.attachment.fileName}</strong><small>{formatCrisisAttachmentSize(editor.attachment.size)} · {editor.attachment.persisted ? "Saved with this update" : "Ready to save"}</small></div><a href={editor.attachment.url} target="_blank" rel="noreferrer">Preview <ExternalLink aria-hidden="true" /></a><button type="button" disabled={attachmentBusy || busy} onClick={() => void removeEditorAttachment()} aria-label={`Remove ${editor.attachment.fileName}`}><X aria-hidden="true" /></button></div> : <button className="crisis-attachment-upload" type="button" disabled={attachmentBusy || busy} onClick={() => attachmentInput.current?.click()} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); const file = event.dataTransfer.files[0]; if (file) void uploadAttachment(file); }}><FileUp aria-hidden="true" /><span><strong>{attachmentBusy ? "Uploading attachment…" : "Choose or drop a delegate file"}</strong><small>The file appears with the public transmission only after publication.</small></span></button>}
+            </div>
           </div>
           <label className="publish-toggle publish-toggle--crisis"><input type="checkbox" checked={editor.isPublished} onChange={(event) => change("isPublished", event.target.checked)} /><span>Publish immediately to delegates</span></label>
-          <div className="editor-actions">{editor.updateId && <button type="button" className="button button--secondary" onClick={() => setEditor({ ...emptyEditor, channel: editor.channel })}>Cancel edit</button>}<button className="button button--primary" type="submit" disabled={busy}><Send aria-hidden="true" /> {busy ? "Saving…" : editor.isPublished ? "Publish transmission" : "Save private draft"}</button></div>
+          <div className="editor-actions">{editor.updateId && <button type="button" className="button button--secondary" disabled={busy || attachmentBusy} onClick={() => void cancelEdit()}>Cancel edit</button>}<button className="button button--primary" type="submit" disabled={busy || attachmentBusy}><Send aria-hidden="true" /> {busy ? "Saving…" : editor.isPublished ? "Publish transmission" : "Save private draft"}</button></div>
           {message && <p className="editor-status editor-status--success"><Check aria-hidden="true" />{message}</p>}{error && <p className="editor-status editor-status--error">{error}</p>}
         </form>
 
         <aside className={`crisis-admin-preview crisis-admin-preview--${editor.channel}`}>
-          <p className="eyebrow">Public preview</p><span>{editor.severity} / {editor.transmission}</span><h3>{editor.headline || "Your crisis headline will appear here"}</h3><p>{editor.briefing || "The full delegate briefing is previewed as plain text. Draft content is never queried by public pages."}</p>{editor.portfolios && <div>{editor.portfolios.split(",").filter(Boolean).map((item) => <b key={item}>{item.trim()}</b>)}</div>}
+          <p className="eyebrow">Public preview</p><span>{editor.severity} / {editor.transmission}</span><h3>{editor.headline || "Your crisis headline will appear here"}</h3><p>{editor.briefing || "The full delegate briefing is previewed as plain text. Draft content is never queried by public pages."}</p>{editor.portfolios && <div>{editor.portfolios.split(",").filter(Boolean).map((item) => <b key={item}>{item.trim()}</b>)}</div>}{editor.attachment && <a className="crisis-preview-attachment" href={editor.attachment.url} target="_blank" rel="noreferrer"><Paperclip aria-hidden="true" /><span><small>DELEGATE FILE</small><strong>{editor.attachment.fileName}</strong></span><ExternalLink aria-hidden="true" /></a>}
         </aside>
       </div>
 
       <div className="crisis-update-history">
         <header><div><p className="eyebrow">Transmission history</p><h3>{experience?.updates.length ?? 0} updates</h3></div></header>
-        {!experience?.updates.length ? <div className="empty-state"><Radio aria-hidden="true" /><h3>No transmissions yet</h3><p>Create a private draft or publish the first committee update.</p></div> : experience.updates.map((update) => <article key={update._id}><span className={`crisis-severity crisis-severity--${update.severity}`} /> <div><small>{update.channel.toUpperCase()} · UPDATE {String(update.updateNumber).padStart(2, "0")} · {update.transmission}</small><strong>{update.headline}</strong><p>{update.briefing}</p></div><b className={update.isPublished ? "is-published" : "is-draft"}>{update.isPublished ? "Published" : "Draft"}</b><div className="crisis-history-actions"><button type="button" onClick={() => editUpdate(update)}><Pencil aria-hidden="true" /> Edit</button><button type="button" onClick={() => void setPublished({ updateId: update._id, isPublished: !update.isPublished })}>{update.isPublished ? "Unpublish" : "Publish"}</button><button type="button" className="danger-text" onClick={() => { if (window.confirm("Delete this crisis update permanently?")) void deleteUpdate({ updateId: update._id }); }}><Trash2 aria-hidden="true" /> Delete</button></div></article>)}
+        {!experience?.updates.length ? <div className="empty-state"><Radio aria-hidden="true" /><h3>No transmissions yet</h3><p>Create a private draft or publish the first committee update.</p></div> : experience.updates.map((update) => <article key={update._id}><span className={`crisis-severity crisis-severity--${update.severity}`} /> <div><small>{update.channel.toUpperCase()} · UPDATE {String(update.updateNumber).padStart(2, "0")} · {update.transmission}</small><strong>{update.headline}</strong><p>{update.briefing}</p>{update.attachment && <span className="crisis-history-attachment"><Paperclip aria-hidden="true" />{update.attachment.fileName} · {formatCrisisAttachmentSize(update.attachment.size)}</span>}</div><b className={update.isPublished ? "is-published" : "is-draft"}>{update.isPublished ? "Published" : "Draft"}</b><div className="crisis-history-actions"><button type="button" onClick={() => editUpdate(update)}><Pencil aria-hidden="true" /> Edit</button><button type="button" onClick={() => void setPublished({ updateId: update._id, isPublished: !update.isPublished })}>{update.isPublished ? "Unpublish" : "Publish"}</button><button type="button" className="danger-text" onClick={() => { if (window.confirm("Delete this crisis update permanently?")) void deleteUpdate({ updateId: update._id }); }}><Trash2 aria-hidden="true" /> Delete</button></div></article>)}
       </div>
     </section>
   </div>;

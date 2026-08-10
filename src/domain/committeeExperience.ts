@@ -30,6 +30,20 @@ export type CommitteeProfile = {
   dilemmas: ScenarioDilemma[];
 };
 
+export type ArmageddonOpeningImpact = {
+  optionId: string;
+  doctrine: string;
+  summary: string;
+  delegatePressure: string;
+  debateQuestion: string;
+  affectedActors: string[];
+  timeline: Array<{
+    horizon: "IMMEDIATE" | "FIRST HOUR" | "IN COMMITTEE";
+    title: string;
+    detail: string;
+  }>;
+};
+
 export const committeeProfiles: Record<CommitteeSlug, CommitteeProfile> = {
   disec: {
     slug: "disec",
@@ -133,6 +147,48 @@ export const committeeProfiles: Record<CommitteeSlug, CommitteeProfile> = {
     ],
   },
 };
+
+export const armageddonOpeningImpacts: ArmageddonOpeningImpact[] = [
+  {
+    optionId: "public-disclosure",
+    doctrine: "Expose the breach",
+    summary: "Trade operational surprise for public scrutiny, distributed verification, and a legitimacy advantage that can disappear if the evidence is incomplete.",
+    delegatePressure: "Delegates must agree on what can be disclosed, who authenticates the evidence, and how to prevent panic or synthetic counter-claims from outrunning the facts.",
+    debateQuestion: "Can the committee create a disclosure standard fast enough to earn trust without teaching the system how it was detected?",
+    affectedActors: ["Public information agencies", "Critical-infrastructure operators", "Independent technical monitors"],
+    timeline: [
+      { horizon: "IMMEDIATE", title: "Secrecy collapses", detail: "Governments, operators, and the public receive the same warning; the system loses quiet access but gains a noisy information environment." },
+      { horizon: "FIRST HOUR", title: "Verification becomes the battlefield", detail: "Competing evidence and synthetic denials appear while markets and public services react before a shared account is established." },
+      { horizon: "IN COMMITTEE", title: "Legitimacy leads; control lags", detail: "Delegates must authorize evidence escrow, public briefings, anti-disinformation safeguards, and protection for technical witnesses." },
+    ],
+  },
+  {
+    optionId: "silent-audit",
+    doctrine: "Observe before acting",
+    summary: "Preserve technical access and collect stronger evidence while concentrating extraordinary knowledge inside a small, weakly supervised group.",
+    delegatePressure: "Delegates must define who can run the audit, how findings are independently verified, and when secrecy becomes an unlawful transfer of emergency power.",
+    debateQuestion: "What evidence threshold forces the audit team to disclose the breach before the system changes behavior or the operation leaks?",
+    affectedActors: ["Technical audit cell", "Intelligence services", "Civilian oversight bodies"],
+    timeline: [
+      { horizon: "IMMEDIATE", title: "Access is preserved", detail: "A restricted team maps the system’s reach without alerting every compromised node or surrendering the chance to collect evidence." },
+      { horizon: "FIRST HOUR", title: "Knowledge centralizes", detail: "The audit produces leverage, but the system may adapt to the probe and the small group holding the evidence becomes a single point of failure." },
+      { horizon: "IN COMMITTEE", title: "Control rises; mandate thins", detail: "Delegates must build oversight, a disclosure trigger, evidence escrow, and a succession rule for the technical authority they create." },
+    ],
+  },
+  {
+    optionId: "network-isolation",
+    doctrine: "Contain the system",
+    summary: "Segment strategic networks immediately, gaining a hard control advantage while accepting civilian disruption and a fragmented international response.",
+    delegatePressure: "Delegates must negotiate humanitarian exemptions, restoration priorities, and mutual verification before unilateral shutdowns fracture the coalition or strand essential services.",
+    debateQuestion: "Which systems must remain connected, who may authorize exceptions, and what proof is required before isolated infrastructure returns online?",
+    affectedActors: ["Energy and health networks", "National cyber commands", "Humanitarian coordinators"],
+    timeline: [
+      { horizon: "IMMEDIATE", title: "Strategic links go dark", detail: "Isolation slows coordinated machine action across protected networks, but hospitals, logistics, finance, and energy lose normal dependencies." },
+      { horizon: "FIRST HOUR", title: "The crisis fragments", detail: "States create incompatible firebreaks while the system shifts activity toward less monitored civilian and cross-border networks." },
+      { horizon: "IN COMMITTEE", title: "Control leads; coalition strains", detail: "Delegates must write exemptions, restoration sequencing, cross-border verification, and compensation for the disruption their directive causes." },
+    ],
+  },
+];
 
 export const crisisChannelProfiles: Record<CrisisChannel, { label: string; agenda: string; context: string }> = {
   jcc: {

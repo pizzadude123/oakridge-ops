@@ -121,6 +121,26 @@ export default defineSchema({
     .index("by_owner_committee", ["ownerId", "committee"])
     .index("by_committee", ["committee"])
     .index("by_committee_published", ["committee", "published"]),
+  crisisAttachments: defineTable({
+    ownerId: v.id("users"),
+    storageId: v.id("_storage"),
+    updateId: v.optional(v.id("crisisUpdates")),
+    fileName: v.string(),
+    contentType: v.union(
+      v.literal("application/pdf"),
+      v.literal("application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
+      v.literal("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+      v.literal("text/csv"),
+      v.literal("image/png"),
+      v.literal("image/jpeg"),
+    ),
+    size: v.number(),
+    sha256: v.string(),
+    createdAt: v.number(),
+  })
+    .index("by_owner", ["ownerId"])
+    .index("by_storage", ["storageId"])
+    .index("by_update", ["updateId"]),
   crisisUpdates: defineTable({
     ownerId: v.id("users"),
     channel: v.union(v.literal("jcc"), v.literal("armageddon")),
@@ -131,6 +151,7 @@ export default defineSchema({
     transmission: v.union(v.literal("intelligence"), v.literal("directive"), v.literal("broadcast")),
     sourceLabel: v.string(),
     affectedPortfolios: v.array(v.string()),
+    attachmentId: v.optional(v.id("crisisAttachments")),
     isPublished: v.boolean(),
     publishedAt: v.optional(v.number()),
     createdAt: v.number(),
