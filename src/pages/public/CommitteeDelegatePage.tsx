@@ -12,6 +12,7 @@ import {
   type CommitteeSlug,
   type ScenarioMetric,
 } from "../../domain/committeeExperience";
+import { ArmageddonDossierWall } from "./ArmageddonDossierWall";
 import { ArmageddonSignalField } from "./ArmageddonSignalField";
 import { ArmageddonSignalRail } from "./ArmageddonSignalRail";
 import { PublicShell } from "./PublicShell";
@@ -229,9 +230,11 @@ function ArmageddonExperience() {
           </ol>
         </section>
 
+        <ArmageddonDossierWall />
+
         <section className="armageddon-chair" aria-labelledby="armageddon-chair-title">
           <div className="armageddon-chair-copy">
-            <p className="public-kicker">02 · From the dais</p>
+            <p className="public-kicker">03 · From the dais</p>
             <h2 id="armageddon-chair-title">{media?.title || "The briefing before the breach."}</h2>
             <p>{media?.description || "A dedicated chair explainer will establish the mandate, procedure, research boundaries, and the failure modes delegates should avoid before the crisis begins."}</p>
             {media && <strong>{media.speaker}</strong>}
@@ -247,7 +250,7 @@ function ArmageddonExperience() {
 
         <section id="scenario-lab" className="armageddon-scenario" aria-labelledby="armageddon-scenario-title">
           <header>
-            <div><p className="public-kicker">03 · Decision matrix</p><h2 id="armageddon-scenario-title" tabIndex={-1}>Choose what remains under human control.</h2></div>
+            <div><p className="public-kicker">04 · Decision matrix</p><h2 id="armageddon-scenario-title" tabIndex={-1}>Choose what remains under human control.</h2></div>
             <button type="button" onClick={() => setSelections({})}><RotateCcw aria-hidden="true" /> Reset all decisions</button>
           </header>
           <p className="scenario-disclosure"><Shield aria-hidden="true" /> Preparation simulation. Outcomes are deterministic trade-offs—not AI judgment or predictions of committee results.</p>
