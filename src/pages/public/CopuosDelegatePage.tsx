@@ -95,7 +95,13 @@ export function CopuosDelegatePage() {
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "auto" });
     document.title = "COPUOS Delegate Experience · Oakridge MUN";
-    return () => { document.title = "Oakridge MUN Operations"; };
+    document.documentElement.classList.add("copuos-scrollbar-hidden");
+    document.body.classList.add("copuos-scrollbar-hidden");
+    return () => {
+      document.title = "Oakridge MUN Operations";
+      document.documentElement.classList.remove("copuos-scrollbar-hidden");
+      document.body.classList.remove("copuos-scrollbar-hidden");
+    };
   }, []);
 
   useEffect(() => {
@@ -250,17 +256,16 @@ export function CopuosDelegatePage() {
   return (
     <PublicShell variant="copuos">
       <div ref={root} className="copuos-experience" data-motion={motionEnabled ? "running" : "paused"}>
+        <div className="copuos-site-film" aria-hidden="true">
+          <video ref={video} muted playsInline preload="auto" poster={copuosPoster}>
+            <source media="(max-width: 700px)" src={copuosVideoMobile} type="video/mp4" />
+            <source media="(min-width: 701px)" src={copuosVideo} type="video/mp4" />
+            <source src={copuosVideoFallback} type="video/webm" />
+          </video>
+          <div className="copuos-video-grade" />
+        </div>
         <section ref={hero} className="copuos-scroll-hero" aria-labelledby="copuos-title">
           <div className="copuos-sticky-frame">
-            <div className="copuos-video-frame" aria-hidden="true">
-              <video ref={video} muted playsInline preload="auto" poster={copuosPoster}>
-                <source media="(max-width: 700px)" src={copuosVideoMobile} type="video/mp4" />
-                <source media="(min-width: 701px)" src={copuosVideo} type="video/mp4" />
-                <source src={copuosVideoFallback} type="video/webm" />
-              </video>
-              <div className="copuos-video-grade" />
-            </div>
-
             <svg className="copuos-orbit-map" viewBox="0 0 1000 1000" aria-hidden="true">
               <ellipse className="copuos-orbit-line copuos-orbit-line--one" cx="500" cy="500" rx="420" ry="190" />
               <ellipse className="copuos-orbit-line copuos-orbit-line--two" cx="500" cy="500" rx="320" ry="430" transform="rotate(51 500 500)" />
@@ -369,7 +374,6 @@ export function CopuosDelegatePage() {
         <section className="copuos-finale copuos-reveal" aria-labelledby="copuos-finale-title">
           <div><p className="copuos-kicker"><Sparkles aria-hidden="true" /> The view changed. The obligation did not.</p><h2 id="copuos-finale-title">Leave Earth.<br />Keep responsibility.</h2></div>
           <div><p>Arrive with definitions, owners, deadlines, financing, and a verification chain—not only a promise to cooperate.</p><a href={profile.backgroundGuideUrl} target="_blank" rel="noreferrer">Read the official guide <ExternalLink aria-hidden="true" /></a></div>
-          <span aria-hidden="true">COPUOS</span>
         </section>
       </div>
     </PublicShell>
