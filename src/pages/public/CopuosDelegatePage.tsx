@@ -1,34 +1,22 @@
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
-import { useQuery } from "convex/react";
 import {
-  ArrowDown,
-
   CirclePause,
   CirclePlay,
   ExternalLink,
   FileText,
   Globe2,
   Orbit,
-  Play,
-  Radio,
   RotateCcw,
-  Satellite,
-  Shield,
-  Sparkles,
-  Users,
 } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { api } from "../../../convex/_generated/api";
 import {
   calculateScenarioOutcome,
   committeeProfiles,
-  toYouTubeEmbedUrl,
   type ScenarioMetric,
 } from "../../domain/committeeExperience";
 import {
   COPUOS_VIDEO_START_SECONDS,
-  copuosChapterForProgress,
   copuosVideoTimeForProgress,
 } from "../../domain/copuosExperience";
 import { PublicShell } from "./PublicShell";
@@ -46,51 +34,52 @@ const metricLabels: Record<ScenarioMetric, string> = {
   legitimacy: "Equitable legitimacy",
 };
 
-const chapters = [
+const narrativeScenes = [
   {
     index: "01",
-    time: "05.00",
-    eyebrow: "One atmosphere",
-    title: "Every orbit begins on shared ground.",
-    body: "The first launch decision already determines registration, disposal, collision risk, and who must answer when an object stops responding.",
+    eyebrow: "The mandate",
+    title: "The orbital commons needs rules before it needs rescue.",
+    body: "Deliberation on Debris Mitigation in Outer Space, with an Emphasis on New Space Junk.",
   },
   {
     index: "02",
-    time: "30.00",
-    eyebrow: "A shared orbital room",
-    title: "Space arrives early. So must governance.",
-    body: "No border contains a debris cloud. Warning data, launch choices, and remediation duties have to cross jurisdictions before fragments cross trajectories.",
+    eyebrow: "Classify",
+    title: "Define the object before assigning the obligation.",
+    body: "Distinguish operational spacecraft, legacy debris, newly generated fragments, and objects whose ownership or control is disputed.",
   },
   {
     index: "03",
-    time: "45.00",
-    eyebrow: "New space junk",
-    title: "A collision is a policy failure at orbital speed.",
-    body: "Delegates must connect detection, attribution, avoidance, end-of-life rules, and financing instead of treating debris as a purely technical problem.",
+    eyebrow: "Coordinate",
+    title: "A warning is useful only if someone must act on it.",
+    body: "Map who detects conjunctions, who shares warnings, who can manoeuvre, who verifies compliance, and what happens when capability is unequal.",
   },
   {
     index: "04",
-    time: "65.00",
-    eyebrow: "The commons after launch",
-    title: "Write rules that survive re-entry.",
-    body: "The resolution must be verifiable, affordable for emerging space actors, enforceable against repeat risk, and precise about who acts next.",
+    eyebrow: "Codify",
+    title: "Write the owner, deadline, financing, and verification chain.",
+    body: "A resolution needs registration duties, end-of-life standards, liability, remediation authority, data access, and equitable support—not another promise to cooperate.",
+  },
+  {
+    index: "05",
+    eyebrow: "From the dais",
+    title: "Read the orbit before you regulate it.",
+    body: "Dhanush Malhotra and Naren Ayinala ask delegates to separate technical fact, legal responsibility, national capability, and the mechanism a clause actually creates.",
   },
 ] as const;
 
 export function CopuosDelegatePage() {
   const profile = committeeProfiles.copuos;
-  const media = useQuery(api.committeeExperience.publicCommitteeMedia, { committee: "copuos" });
   const root = useRef<HTMLDivElement>(null);
   const hero = useRef<HTMLElement>(null);
   const video = useRef<HTMLVideoElement>(null);
-  const timeReadout = useRef<HTMLElement>(null);
+
   const [chapter, setChapter] = useState(0);
   const [motionEnabled, setMotionEnabled] = useState(true);
   const [heroInViewport, setHeroInViewport] = useState(true);
   const [selections, setSelections] = useState<Record<string, string>>({});
   const selectedIds = useMemo(() => Object.values(selections), [selections]);
   const outcome = useMemo(() => calculateScenarioOutcome("copuos", selectedIds), [selectedIds]);
-  const embedUrl = media ? toYouTubeEmbedUrl(media.videoUrl) : null;
+
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "auto" });
@@ -139,7 +128,7 @@ export function CopuosDelegatePage() {
         const encodedSeconds = Math.max(0, seconds - COPUOS_VIDEO_START_SECONDS);
         if (mediaElement.readyState < 1 || Math.abs(mediaElement.currentTime - encodedSeconds) < 1 / 45) return;
         mediaElement.currentTime = encodedSeconds;
-        if (timeReadout.current) timeReadout.current.textContent = `${seconds.toFixed(2)} SEC`;
+
       };
       const setStaticFrame = () => {
         page.style.setProperty("--copuos-progress", ".12");
@@ -163,8 +152,7 @@ export function CopuosDelegatePage() {
         intro
           .from(".copuos-hero-brand", { y: 18, opacity: 0, filter: "blur(12px)", duration: .8 })
           .from(".copuos-title-line > span", { yPercent: 110, rotateX: -16, filter: "blur(16px)", stagger: .09, duration: .85 }, .15)
-          .from(".copuos-hero-intro > p, .copuos-hero-actions", { y: 20, opacity: 0, filter: "blur(12px)", stagger: .1, duration: .65 }, .42)
-          .from(".copuos-telemetry", { x: 18, opacity: 0, stagger: .07, duration: .55 }, .58);
+          .from(".copuos-hero-intro > p, .copuos-hero-actions", { y: 20, opacity: 0, filter: "blur(12px)", stagger: .1, duration: .65 }, .42);
 
         const playhead = { time: COPUOS_VIDEO_START_SECONDS };
         let currentChapter = -1;
@@ -174,7 +162,7 @@ export function CopuosDelegatePage() {
           end: "bottom bottom",
           onUpdate: (self) => {
             const nextTime = copuosVideoTimeForProgress(self.progress);
-            const nextChapter = copuosChapterForProgress(self.progress);
+            const nextChapter = Math.min(8, Math.floor(self.progress * 9));
             page.style.setProperty("--copuos-progress", String(self.progress));
             gsap.to(playhead, {
               time: nextTime,
@@ -191,9 +179,6 @@ export function CopuosDelegatePage() {
         });
         scrollTrigger.update();
 
-        gsap.to(".copuos-orbit-line--one", { strokeDashoffset: -520, ease: "none", scrollTrigger: { trigger: stage, start: "top top", end: "bottom bottom", scrub: 1.4 } });
-        gsap.to(".copuos-orbit-line--two", { strokeDashoffset: 420, ease: "none", scrollTrigger: { trigger: stage, start: "top top", end: "bottom bottom", scrub: 1.8 } });
-        gsap.to(".copuos-orbit-node", { motionPath: undefined, rotate: 220, transformOrigin: "50% 50%", ease: "none", scrollTrigger: { trigger: stage, start: "top top", end: "bottom bottom", scrub: 1.2 } });
 
       });
 
@@ -205,49 +190,6 @@ export function CopuosDelegatePage() {
     }, page);
     return () => { mediaQuery.revert(); context.revert(); };
   }, [heroInViewport, motionEnabled]);
-
-  useLayoutEffect(() => {
-    const page = root.current;
-    if (!page) return;
-    const mediaQuery = gsap.matchMedia();
-    const context = gsap.context(() => {
-      mediaQuery.add("(prefers-reduced-motion: no-preference)", () => {
-        const cleanups: Array<() => void> = [];
-        gsap.utils.toArray<HTMLElement>(".copuos-reveal").forEach((section) => {
-          gsap.from(section.querySelectorAll(":scope > *"), {
-            y: 34,
-            opacity: 0,
-            filter: "blur(12px)",
-            stagger: .075,
-            duration: .72,
-            ease: "power3.out",
-            scrollTrigger: { trigger: section, start: "top 82%", once: true },
-          });
-        });
-        gsap.utils.toArray<HTMLElement>("[data-copuos-tilt]").forEach((card) => {
-          const move = (event: PointerEvent) => {
-            if (event.pointerType !== "mouse") return;
-            const bounds = card.getBoundingClientRect();
-            const x = (event.clientX - bounds.left) / bounds.width - .5;
-            const y = (event.clientY - bounds.top) / bounds.height - .5;
-            gsap.to(card, { rotateY: x * 5, rotateX: y * -5, y: -5, duration: .45, ease: "power3.out", overwrite: "auto" });
-          };
-          const reset = () => gsap.to(card, { rotateX: 0, rotateY: 0, y: 0, duration: .7, ease: "elastic.out(1,.55)", overwrite: "auto" });
-          card.addEventListener("pointermove", move);
-          card.addEventListener("pointerleave", reset);
-          card.addEventListener("blur", reset, true);
-          cleanups.push(() => {
-            card.removeEventListener("pointermove", move);
-            card.removeEventListener("pointerleave", reset);
-            card.removeEventListener("blur", reset, true);
-            gsap.killTweensOf(card);
-          });
-        });
-        return () => cleanups.forEach((cleanup) => cleanup());
-      });
-    }, page);
-    return () => { mediaQuery.revert(); context.revert(); };
-  }, []);
 
   function choose(dilemmaId: string, optionId: string) {
     setSelections((current) => ({ ...current, [dilemmaId]: optionId }));
@@ -266,11 +208,6 @@ export function CopuosDelegatePage() {
         </div>
         <section ref={hero} className="copuos-scroll-hero" aria-labelledby="copuos-title">
           <div className="copuos-sticky-frame">
-            <svg className="copuos-orbit-map" viewBox="0 0 1000 1000" aria-hidden="true">
-              <ellipse className="copuos-orbit-line copuos-orbit-line--one" cx="500" cy="500" rx="420" ry="190" />
-              <ellipse className="copuos-orbit-line copuos-orbit-line--two" cx="500" cy="500" rx="320" ry="430" transform="rotate(51 500 500)" />
-              <circle className="copuos-orbit-node" cx="885" cy="430" r="7" />
-            </svg>
 
             <div className="copuos-hero-brand">
               <span><Globe2 aria-hidden="true" /> OAKRIDGE MUN XVI</span>
@@ -291,90 +228,44 @@ export function CopuosDelegatePage() {
               </h1>
               <p>{profile.overview}</p>
               <div className="copuos-hero-actions">
-                <a href="#copuos-policy-lab">Enter the policy lab <ArrowDown aria-hidden="true" /></a>
                 <a href={profile.backgroundGuideUrl} target="_blank" rel="noreferrer"><FileText aria-hidden="true" /> Official background guide</a>
               </div>
             </div>
 
-            <div className="copuos-chapter-stage" aria-live="polite" aria-atomic="true">
-              {chapters.map((item, index) => <article key={item.index} className={index === chapter ? "is-active" : ""} aria-hidden={index !== chapter}>
-                <div><span>{item.index}</span><small>{item.time} SEC</small></div>
+            <div className="copuos-scene-stage" aria-live="polite" aria-atomic="true">
+              {narrativeScenes.map((item, index) => <article key={item.index} className={`copuos-film-scene ${index === chapter ? "is-active" : ""} ${index % 2 ? "copuos-film-scene--right" : ""}`}>
+                <span>{item.index} / 09</span>
                 <p>{item.eyebrow}</p>
                 <h2>{item.title}</h2>
                 <p>{item.body}</p>
+                {index === 0 && <a href={profile.backgroundGuideUrl} target="_blank" rel="noreferrer"><FileText aria-hidden="true" /> Official background guide</a>}
               </article>)}
-            </div>
-
-            <div className="copuos-telemetry" aria-hidden="true">
-              <span><b>FRAME</b><em ref={timeReadout}>05.00 SEC</em></span>
-              <span><b>ALTITUDE</b><em>SHARED DOMAIN</em></span>
-              <span><b>AGENDA</b><em>DEBRIS / NEW SPACE JUNK</em></span>
-            </div>
-            <div className="copuos-scroll-meter" aria-hidden="true"><i /><span>SCROLL TO LEAVE EARTH</span></div>
-          </div>
-        </section>
-
-        <section className="copuos-agenda copuos-reveal" aria-labelledby="copuos-agenda-title">
-          <div className="copuos-section-index"><span>01</span><small>THE MANDATE</small></div>
-          <div className="copuos-agenda-copy">
-            <p className="copuos-kicker">The problem is invisible until trajectories intersect</p>
-            <h2 id="copuos-agenda-title">The orbital commons needs rules before it needs rescue.</h2>
-            <p>{profile.agenda}</p>
-          </div>
-          <ol>
-            {profile.preparation.map((item, index) => <li key={item} data-copuos-tilt tabIndex={0}><span>0{index + 1}</span><div><small>{["CLASSIFY", "COORDINATE", "CODIFY"][index]}</small><p>{item}</p></div><Satellite aria-hidden="true" /></li>)}
-          </ol>
-        </section>
-
-        <section className="copuos-dais copuos-reveal" aria-labelledby="copuos-dais-title">
-          <div className="copuos-dais-media">
-            <div className="copuos-media-status"><span>DAIS TRANSMISSION</span><small>{media ? "PUBLISHED" : "AWAITING PUBLICATION"}</small></div>
-            <div className="chair-video">
-              {media === undefined ? <div className="chair-video-state"><span className="signal-loader" /><p>Checking the briefing channel…</p></div> : embedUrl && media ? <iframe src={embedUrl} title={`${media.title} — ${media.speaker}`} loading="lazy" allow="accelerometer; encrypted-media; gyroscope; picture-in-picture" allowFullScreen /> : <div className="chair-video-state"><Play aria-hidden="true" /><p>Chair explainer awaiting EB publication</p><small>The dais can publish its preparation briefing from staff operations.</small></div>}
+              {profile.dilemmas.map((dilemma, dilemmaIndex) => {
+                const sceneIndex = dilemmaIndex + narrativeScenes.length;
+                return <article key={dilemma.id} className={`copuos-film-scene copuos-film-decision ${sceneIndex === chapter ? "is-active" : ""}`}>
+                  <span>0{sceneIndex + 1} / 09 · {dilemma.phase}</span>
+                  <p>Make the clause operational</p>
+                  <h2>{dilemma.prompt}</h2>
+                  <div>{dilemma.options.map((option, optionIndex) => {
+                    const selected = selections[dilemma.id] === option.id;
+                    return <button key={option.id} type="button" aria-pressed={selected} className={selected ? "is-selected" : ""} onClick={() => choose(dilemma.id, option.id)}>
+                      <small>0{optionIndex + 1}</small><strong>{option.label}</strong><em>{option.consequence}</em>
+                    </button>;
+                  })}</div>
+                </article>;
+              })}
+              <article className={`copuos-film-scene copuos-film-outcome ${chapter === 8 ? "is-active" : ""}`}>
+                <span>09 / 09 · Negotiated outcome</span>
+                <p>{outcome.selectedCount}/3 policy layers locked</p>
+                <h2>{outcome.assessment}</h2>
+                <div className="copuos-film-metrics">{(Object.entries(outcome.metrics) as Array<[ScenarioMetric, number]>).map(([metric, value]) => <div key={metric}><small>{metricLabels[metric]}</small><strong>{value}</strong><i><em style={{ width: `${value}%` }} /></i></div>)}</div>
+                <p>{outcome.selectedCount === 0 ? "Choose one response in each policy phase before interpreting the pressure profile." : "Use the weakest dimension as the next moderated-caucus question. Arrive with owners, deadlines, financing, and verification—not only a promise to cooperate."}</p>
+                <div className="copuos-film-actions"><button type="button" onClick={() => setSelections({})}><RotateCcw aria-hidden="true" /> Reset policy</button><a href={profile.backgroundGuideUrl} target="_blank" rel="noreferrer">Read the official guide <ExternalLink aria-hidden="true" /></a></div>
+              </article>
             </div>
           </div>
-          <div className="copuos-dais-copy">
-            <p className="copuos-kicker">02 · From the dais</p>
-            <h2 id="copuos-dais-title">{media?.title || "Read the orbit before you regulate it."}</h2>
-            <p>{media?.description || "Use the background guide to separate technical fact, legal responsibility, national capability, and the negotiated mechanism your draft resolution actually creates."}</p>
-            {media && <strong>{media.speaker}</strong>}
-            <div className="copuos-chair-roster"><Users aria-hidden="true" /><div>{profile.chairs.map((chair) => <span key={chair.name}><b>{chair.name}</b><small>{chair.role}</small></span>)}</div></div>
-          </div>
         </section>
 
-        <section id="copuos-policy-lab" className="copuos-policy-lab copuos-reveal" aria-labelledby="copuos-policy-title">
-          <header>
-            <div><p className="copuos-kicker">03 · Orbital policy lab</p><h2 id="copuos-policy-title">Build a debris mandate that survives the launch window.</h2></div>
-            <button type="button" onClick={() => setSelections({})}><RotateCcw aria-hidden="true" /> Reset policy</button>
-          </header>
-          <p className="copuos-disclosure"><Shield aria-hidden="true" /> Deterministic preparation simulation. The pressure profile exposes trade-offs; it is not AI judgment or a prediction of committee results.</p>
-          <div className="copuos-policy-grid">
-            <div className="copuos-dilemmas">
-              {profile.dilemmas.map((dilemma) => <fieldset key={dilemma.id}>
-                <legend><span>{dilemma.phase}</span>{dilemma.prompt}</legend>
-                <div>{dilemma.options.map((option, optionIndex) => {
-                  const selected = selections[dilemma.id] === option.id;
-                  return <button data-copuos-tilt key={option.id} type="button" aria-pressed={selected} className={selected ? "is-selected" : ""} onClick={() => choose(dilemma.id, option.id)}>
-                    <span>0{optionIndex + 1}</span><strong>{option.label}</strong><small>{option.consequence}</small><i aria-hidden="true" />
-                  </button>;
-                })}</div>
-              </fieldset>)}
-            </div>
-            <aside className="copuos-outcome" aria-live="polite" aria-atomic="true">
-              <div className="copuos-outcome-signal"><Radio aria-hidden="true" /><span>{outcome.selectedCount}/3 POLICY LAYERS LOCKED</span></div>
-              <div className="copuos-radar" aria-hidden="true"><i /><i /><i /><span /></div>
-              <h3>Orbital pressure profile</h3>
-              <p>{outcome.assessment}</p>
-              <div className="copuos-metrics">{(Object.entries(outcome.metrics) as Array<[ScenarioMetric, number]>).map(([metric, value]) => <div key={metric}><span><b>{metricLabels[metric]}</b><strong>{value}</strong></span><i><em style={{ width: `${value}%` }} /></i></div>)}</div>
-              <small>Use the weakest dimension as the next moderated-caucus question—not as a score to maximize blindly.</small>
-            </aside>
-          </div>
-        </section>
-
-        <section className="copuos-finale copuos-reveal" aria-labelledby="copuos-finale-title">
-          <div><p className="copuos-kicker"><Sparkles aria-hidden="true" /> The view changed. The obligation did not.</p><h2 id="copuos-finale-title">Leave Earth.<br />Keep responsibility.</h2></div>
-          <div><p>Arrive with definitions, owners, deadlines, financing, and a verification chain—not only a promise to cooperate.</p><a href={profile.backgroundGuideUrl} target="_blank" rel="noreferrer">Read the official guide <ExternalLink aria-hidden="true" /></a></div>
-        </section>
       </div>
     </PublicShell>
   );

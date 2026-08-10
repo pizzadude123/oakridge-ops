@@ -25,11 +25,11 @@ export function PublicShell({ children, variant }: { children: ReactNode; varian
         <Link className="public-operations-link" to="/"><ShieldCheck aria-hidden="true" /> Staff operations</Link>
       </header>
       <main id="delegate-content" tabIndex={-1}>{children}</main>
-      <footer className="public-footer">
+      {variant !== "copuos" && <footer className="public-footer">
         <div><Radio aria-hidden="true" /><strong>Oakridge MUN XVI</strong></div>
         <p>Crisis transmissions and scenario outcomes are fictional committee simulation material—not real-world alerts, reporting, or automated advice.</p>
         <Link to="/">Staff sign-in</Link>
-      </footer>
+      </footer>}
     </div>
   );
 }
