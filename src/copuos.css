@@ -44,7 +44,7 @@
 .copuos-hero-intro { position: absolute; z-index: 6; top: 52%; left: clamp(28px,6vw,104px); width: min(760px,58vw); opacity: clamp(0,calc(1 - var(--copuos-progress) * 22),1); transform: translateY(calc(-50% - var(--copuos-progress) * 32px)); text-shadow: 0 4px 30px #000,0 2px 8px #000; }
 .copuos-kicker { display: flex; align-items: center; gap: 9px; color: #bdeeff; font: 700 .61rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing: .12em; text-transform: uppercase; }
 .copuos-kicker svg { width: 17px; }
-.copuos-hero-intro h1 { margin: 18px 0 22px; font-family: var(--font-display); font-weight: 850; letter-spacing: -.075em; }
+.copuos-hero-intro h1 { margin: 18px 0 22px; font-family: "Inter",system-ui,sans-serif; font-weight: 300; letter-spacing: -.065em; }
 .copuos-title-line { display: block; overflow: clip; perspective: 900px; }
 .copuos-title-line > span { display: block; transform-origin: bottom; }
 .copuos-title-line:first-child { font-size: clamp(5rem,9.7vw,10rem); line-height: .74; }
@@ -62,7 +62,7 @@
 .copuos-film-scene--right { right: clamp(28px,7vw,120px); left: auto; }
 .copuos-film-scene > span { color: #bdeeff; font: 700 .58rem/1 ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing: .13em; text-transform: uppercase; }
 .copuos-film-scene > p:first-of-type { margin: 20px 0 8px; color: #bdeeff; font: 700 .63rem/1.4 ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing: .12em; text-transform: uppercase; }
-.copuos-film-scene h2 { max-width: 900px; margin: 0 0 20px; font-family: var(--font-display); font-size: clamp(3.2rem,6.2vw,7.4rem); line-height: .88; letter-spacing: -.065em; }
+.copuos-film-scene h2 { max-width: 900px; margin: 0 0 20px; font-family: "Inter",system-ui,sans-serif; font-size: clamp(3.2rem,6.2vw,7.4rem); font-weight: 300; line-height: .88; letter-spacing: -.065em; }
 .copuos-film-scene > p:last-of-type { max-width: 650px; color: #e4f1f7; font-size: clamp(.85rem,1vw,.98rem); line-height: 1.72; }
 .copuos-film-scene > a { margin-top: 22px; }
 
@@ -74,7 +74,7 @@
 .copuos-film-decision button.is-selected { color: #06131f; border-color: #c8efff; background: #c8efff; text-shadow: none; }
 .copuos-film-decision button small,.copuos-film-decision button strong,.copuos-film-decision button em { display: block; }
 .copuos-film-decision button small { margin-bottom: 25px; font: .52rem/1 ui-monospace,SFMono-Regular,Menlo,monospace; }
-.copuos-film-decision button strong { font-family: var(--font-display); font-size: clamp(1rem,1.5vw,1.35rem); line-height: 1.15; }
+.copuos-film-decision button strong { font-family: "Inter",system-ui,sans-serif; font-size: clamp(1rem,1.5vw,1.35rem); font-weight: 500; line-height: 1.15; }
 .copuos-film-decision button em { margin-top: 10px; font-size: .62rem; font-style: normal; line-height: 1.55; }
 
 .copuos-film-outcome { top: 50%; width: min(980px,84vw); }
@@ -83,7 +83,7 @@
 .copuos-film-metrics > div { padding-top: 12px; border-top: 1px solid rgba(210,244,255,.52); }
 .copuos-film-metrics small,.copuos-film-metrics strong { display: block; }
 .copuos-film-metrics small { min-height: 28px; font: .5rem/1.35 ui-monospace,SFMono-Regular,Menlo,monospace; text-transform: uppercase; }
-.copuos-film-metrics strong { margin: 9px 0; font: 700 1.6rem/1 var(--font-display); }
+.copuos-film-metrics strong { margin: 9px 0; font: 500 1.6rem/1 "Inter",system-ui,sans-serif; }
 .copuos-film-metrics i { display: block; height: 3px; background: rgba(255,255,255,.2); }
 .copuos-film-metrics em { display: block; height: 100%; background: #c8efff; }
 .copuos-film-actions { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 24px; }
